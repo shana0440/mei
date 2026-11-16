@@ -22,6 +22,15 @@ export function openDb(path: string): DatabaseSync {
       topic TEXT NOT NULL,
       last_event_id INTEGER NOT NULL,
       last_active_at INTEGER NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS timers (
+      id INTEGER PRIMARY KEY,
+      name TEXT UNIQUE NOT NULL,
+      kind TEXT NOT NULL,
+      spec TEXT NOT NULL,
+      payload TEXT NOT NULL,
+      due_at INTEGER NOT NULL,
+      status TEXT NOT NULL
     )
   `);
   return db;
