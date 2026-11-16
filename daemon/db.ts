@@ -7,7 +7,6 @@ export function openDb(path: string): DatabaseSync {
       id INTEGER PRIMARY KEY,
       type TEXT NOT NULL,
       payload TEXT NOT NULL,
-      dedupe_key TEXT UNIQUE,
       status TEXT NOT NULL,
       attempts INTEGER NOT NULL DEFAULT 0,
       session_id TEXT,

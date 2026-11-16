@@ -4,7 +4,6 @@ export type InboxEvent = {
   id: number;
   type: string;
   payload: unknown;
-  dedupeKey: string | null;
   status: "pending" | "running" | "done" | "failed";
   attempts: number;
   sessionId: string | null;
@@ -16,11 +15,11 @@ export type InboxEvent = {
   finishedAt: number | null;
 };
 
-type NewEvent = { type: string; payload: unknown; dedupeKey?: string };
+type NewEvent = { type: string; payload: unknown };
 type Outcome = { result: string; sessionId: string; topic: string };
 
 const selectEvents = `
-  SELECT id, type, payload, dedupe_key AS dedupeKey, status, attempts,
+  SELECT id, type, payload, status, attempts,
     session_id AS sessionId, topic, result, error,
     created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt
   FROM events`;
@@ -32,17 +31,11 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
     .map((row) => ({ ...row, payload: JSON.parse(row.payload as string) }) as InboxEvent);
 }
 
-export function addEvent(db: DatabaseSync, { type, payload, dedupeKey }: NewEvent, now: number): number {
-  const added = db
-    .prepare(
-      `INSERT INTO events (type, payload, dedupe_key, status, created_at)
-       VALUES (?, ?, ?, 'pending', ?)
-       ON CONFLICT (dedupe_key) DO NOTHING
-       RETURNING id`,
-    )
-    .get(type, JSON.stringify(payload), dedupeKey ?? null, now);
-  const event = added ?? db.prepare("SELECT id FROM events WHERE dedupe_key = ?").get(dedupeKey!);
-  return event!.id as number;
+export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: number): number {
+  const { lastInsertRowid } = db
+    .prepare("INSERT INTO events (type, payload, status, created_at) VALUES (?, ?, 'pending', ?)")
+    .run(type, JSON.stringify(payload), now);
+  return Number(lastInsertRowid);
 }
 
 export function nextPending(db: DatabaseSync): InboxEvent | undefined {
