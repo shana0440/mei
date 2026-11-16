@@ -1,7 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export const eventTypes = ["user.message", "session.idle", "timer.fired"];
-
 export type InboxEvent = {
   id: number;
   type: string;
@@ -18,7 +16,7 @@ export type InboxEvent = {
   finishedAt: number | null;
 };
 
-export type NewEvent = { type: string; payload: unknown; dedupeKey?: string };
+type NewEvent = { type: string; payload: unknown; dedupeKey?: string };
 type Outcome = { result: string; sessionId: string; topic: string };
 
 const selectEvents = `
@@ -35,9 +33,6 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
 }
 
 export function addEvent(db: DatabaseSync, { type, payload, dedupeKey }: NewEvent, now: number): number {
-  if (!eventTypes.includes(type)) {
-    throw new Error(`Unknown event type "${type}". Use one of: ${eventTypes.join(", ")}`);
-  }
   const added = db
     .prepare(
       `INSERT INTO events (type, payload, dedupe_key, status, created_at)

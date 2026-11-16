@@ -13,8 +13,8 @@ npm run daemon
 With the daemon running, in another terminal:
 
 ```sh
-npm run event -- user.message --payload '{"text":"hi"}'   # add an event, prints its ID
-npm run status                                            # list pending, running and recent events
+npm run chat -- "hi"   # send mei a message
+npm run status         # list pending, running and recent messages
 ```
 
-An event type is `user.message`, `session.idle` or `timer.fired`. Pass `--dedupe <key>` to add an event at most once per key.
+mei keeps every message but does not answer yet.

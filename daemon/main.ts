@@ -8,7 +8,7 @@ mkdirSync(stateDir, { recursive: true });
 const db = openDb(dbPath);
 
 await startServer(socketPath, {
-  "event.add": ({ event }) => ({ id: addEvent(db, event, Date.now()) }),
+  chat: ({ text }) => ({ id: addEvent(db, { type: "user.message", payload: { text } }, Date.now()) }),
   status: () => ({ events: recentEvents(db, 10) }),
 });
 

@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "daemon": "node daemon/main.ts",
-    "event": "node daemon/event.ts",
-    "status": "node daemon/status.ts"
+    "status": "node daemon/status.ts",
+    "chat": "node daemon/chat.ts"
   }
 }
