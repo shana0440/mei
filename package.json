@@ -1,0 +1,8 @@
+{
+  "name": "mei",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "daemon": "node daemon/main.ts"
+  }
+}
