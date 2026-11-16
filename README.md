@@ -19,7 +19,7 @@ npm run chat -- --debug "hi"    # also show where the message went and the work 
 npm run status                  # list pending, running and recent messages, and recently closed sessions
 ```
 
-Messages are answered one at a time, oldest first.
+mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
 
 mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic in brackets before the answer:
 
@@ -85,7 +85,7 @@ daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. Runs happen one at a time in their own queue, so a chat message is answered while a run is going. A run that was due while the daemon was stopped happens once when the daemon starts.
+The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 ```sh
 npm run job -- morning          # run a schedule now
