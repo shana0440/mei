@@ -117,35 +117,19 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run status` | list schedules, closed sessions and recent messages |
 | `npm run job -- <schedule name>` | run a schedule now |
 
-To keep the daemon running whenever you are logged in, and to chat from any directory, add a systemd user service and a `mei` command. Replace `/path/to/mei` with this checkout, and make sure the service's `PATH` has `node`, `pi-bolt` and the tools you want mei to use.
-
-`~/.config/systemd/user/mei.service`:
-
-```ini
-[Unit]
-Description=mei personal assistant daemon
-
-[Service]
-WorkingDirectory=/path/to/mei
-ExecStart=/usr/bin/env node daemon/main.ts
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
-
-`~/.local/bin/mei`, made executable:
+To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
 ```sh
-#!/bin/sh
-exec node /path/to/mei/daemon/chat.ts "$@"
-```
-
-```sh
+make install                    # with Nix: nix-shell --run "make install"
+systemctl --user daemon-reload
 systemctl --user enable --now mei
 mei "hi"
 journalctl --user -u mei        # what the daemon printed
 ```
+
+`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout. The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed, then `systemctl --user daemon-reload` and `systemctl --user restart mei`.
+
+`make uninstall` stops the service and removes both files.
 
 The full record of each answer and scheduled run is in `state/logs/`, described below.
 
