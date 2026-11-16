@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config, Schedule } from "./config.ts";
@@ -55,18 +55,10 @@ const handlers: Record<string, Handler | undefined> = {
     const template = readFileSync(join(root, prompt), "utf8");
     const key = `watermark:${name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
-    const transcripts = (existsSync(chatSessionsDir) ? readdirSync(chatSessionsDir) : [])
-      .filter((file) => file.endsWith(".jsonl"))
-      .sort()
-      .map((file) => join(chatSessionsDir, file))
-      .filter((file) => statSync(file).mtimeMs > watermark);
-    if (template.includes("{{transcripts}}") && transcripts.length === 0) {
-      return { result: "nothing to do", topic: name };
-    }
     const { ok, response, error } = await deps.run({
       prompt: fillPrompt(template, {
         now: new Date(startedAt).toLocaleString(),
-        transcripts: transcripts.join("\n") || "none",
+        last_run: watermark ? new Date(watermark).toISOString() : "never",
         sessions_dir: chatSessionsDir,
       }),
       model,
