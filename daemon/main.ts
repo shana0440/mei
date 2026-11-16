@@ -9,7 +9,7 @@ import { configPath, dbPath, logsDir, socketPath } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { startServer } from "./server.ts";
-import { syncSchedules } from "./timers.ts";
+import { listTimers, syncSchedules } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
@@ -39,7 +39,14 @@ await runCommand(async () => {
       if (event.error !== null) throw new Error(event.error);
       return { result: event.result ?? "", topic: event.topic ?? "" };
     },
-    status: () => ({ events: recentEvents(db, 10) }),
+    job: ({ name }) => {
+      const timer = listTimers(db).find((candidate) => candidate.name === name);
+      if (!timer) throw new Error(`No schedule is named "${name}"`);
+      const eventId = addEvent(db, { type: "timer.fired", payload: timer.payload }, Date.now());
+      wake();
+      return { eventId };
+    },
+    status: () => ({ events: recentEvents(db, 10), timers: listTimers(db) }),
   });
 
   recoverRunning(db, maxAttempts, Date.now());
