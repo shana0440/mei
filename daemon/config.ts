@@ -5,7 +5,7 @@ import type { TomlTable, TomlValue } from "smol-toml";
 import { root } from "./paths.ts";
 
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
-export type Schedule = { name: string; prompt: string; model: string; spec: ScheduleSpec };
+export type Schedule = { name: string; prompt: string; model: string; backup_memory: boolean; spec: ScheduleSpec };
 
 export type Config = {
   chat: { model: string };
@@ -51,10 +51,13 @@ function schedule(table: TomlTable, index: number): Schedule {
   if ("daily_at" in table === "every_minutes" in table) {
     throw new Error(`${from.label} needs exactly one of daily_at or every_minutes`);
   }
+  const backupMemory = table.backup_memory ?? false;
+  if (typeof backupMemory !== "boolean") throw new Error(`${from.label}.backup_memory must be a boolean`);
   return {
     name,
     prompt,
     model: "model" in table ? text(from, "model") : "",
+    backup_memory: backupMemory,
     spec:
       "daily_at" in table
         ? { daily_at: timeOfDay(from, "daily_at") }

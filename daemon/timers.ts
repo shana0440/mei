@@ -36,8 +36,8 @@ export function syncSchedules(db: DatabaseSync, schedules: Schedule[], now: numb
        payload = excluded.payload,
        due_at = CASE WHEN spec = excluded.spec THEN due_at ELSE excluded.due_at END`,
   );
-  for (const { name, prompt, model, spec } of schedules) {
-    upsert.run(name, JSON.stringify(spec), JSON.stringify({ name, prompt, model }), nextDue(spec, now));
+  for (const { spec, ...payload } of schedules) {
+    upsert.run(payload.name, JSON.stringify(spec), JSON.stringify(payload), nextDue(spec, now));
   }
   db.prepare("DELETE FROM timers WHERE kind = 'schedule' AND name NOT IN (SELECT value FROM json_each(?))").run(
     JSON.stringify(schedules.map(({ name }) => name)),
