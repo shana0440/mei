@@ -1,2 +1,5 @@
 [chat]
 model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; empty uses Pi's default
+
+[router]
+model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to

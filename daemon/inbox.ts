@@ -80,3 +80,25 @@ export function recentEvents(db: DatabaseSync, limit: number): InboxEvent[] {
     limit,
   );
 }
+
+export type RecentSession = {
+  sessionId: string;
+  topic: string | null;
+  text: string;
+  result: string;
+  lastActive: number;
+};
+
+export function recentSessions(db: DatabaseSync, limit: number): RecentSession[] {
+  return db
+    .prepare(
+      `SELECT session_id AS sessionId, topic, json_extract(payload, '$.text') AS text, result,
+         finished_at AS lastActive, MAX(id) AS lastEvent
+       FROM events
+       WHERE type = 'user.message' AND status = 'done' AND session_id IS NOT NULL
+       GROUP BY session_id
+       ORDER BY lastEvent DESC
+       LIMIT ?`,
+    )
+    .all(limit) as RecentSession[];
+}
