@@ -1,0 +1,21 @@
+import { request, runCommand } from "./client.ts";
+import type { InboxEvent } from "./inbox.ts";
+
+function duration({ startedAt, finishedAt }: InboxEvent): string {
+  if (startedAt === null) return "-";
+  return `${(((finishedAt ?? Date.now()) - startedAt) / 1000).toFixed(1)}s`;
+}
+
+function outcome({ result, error }: InboxEvent): string {
+  return (error ?? result ?? "").split("\n")[0];
+}
+
+await runCommand(async () => {
+  const { events } = await request({ type: "status" });
+  console.log("daemon: running");
+  for (const event of events as InboxEvent[]) {
+    console.log(
+      [`#${event.id}`, event.type, event.status, event.topic ?? "-", duration(event), outcome(event)].join("  ").trimEnd(),
+    );
+  }
+});
