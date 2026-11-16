@@ -8,12 +8,14 @@ import type { InboxEvent } from "./inbox.ts";
 import { configPath, dbPath, logsDir, socketPath } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
+import { closedSessions } from "./sessions.ts";
 import { startServer } from "./server.ts";
 import { listTimers, syncSchedules } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
 const maxAttempts = 3;
+const recentlyClosed = 7 * 24 * 60 * 60_000;
 
 await runCommand(async () => {
   const config = loadConfig(configPath);
@@ -51,7 +53,11 @@ await runCommand(async () => {
       wake();
       return { eventId };
     },
-    status: () => ({ events: recentEvents(db, 10), timers: listTimers(db) }),
+    status: () => ({
+      events: recentEvents(db, 10),
+      timers: listTimers(db),
+      closed: closedSessions(db, Date.now() - recentlyClosed),
+    }),
   });
 
   console.log("mei daemon started");

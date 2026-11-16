@@ -11,10 +11,13 @@ function outcome({ result, error }: InboxEvent): string {
 }
 
 await runCommand(async () => {
-  const { events, timers } = await request({ type: "status" });
+  const { events, timers, closed } = await request({ type: "status" });
   console.log("daemon: running");
   for (const timer of timers) {
     console.log(`${timer.kind} ${timer.name}  next ${new Date(timer.dueAt).toLocaleString()}`);
+  }
+  for (const session of closed) {
+    console.log(`closed ${new Date(session.closedAt).toLocaleString()}  ${session.topic}  ${session.summary}`);
   }
   for (const event of events) {
     console.log(
