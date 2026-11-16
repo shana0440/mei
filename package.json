@@ -5,7 +5,8 @@
   "scripts": {
     "daemon": "node daemon/main.ts",
     "status": "node daemon/status.ts",
-    "chat": "node daemon/chat.ts"
+    "chat": "node daemon/chat.ts",
+    "job": "node daemon/job.ts"
   },
   "dependencies": {
     "smol-toml": "^1.9.1"

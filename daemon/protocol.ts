@@ -1,8 +1,10 @@
 import type { InboxEvent } from "./inbox.ts";
+import type { Timer } from "./timers.ts";
 
 export type Requests = {
   chat: { message: { text: string; debug?: boolean }; reply: { result: string; topic: string } };
-  status: { message: {}; reply: { events: InboxEvent[] } };
+  job: { message: { name: string }; reply: { eventId: number } };
+  status: { message: {}; reply: { events: InboxEvent[]; timers: Timer[] } };
 };
 
 export type RequestType = keyof Requests;
