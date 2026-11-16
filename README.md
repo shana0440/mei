@@ -70,7 +70,7 @@ daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. Runs share the queue with chat messages, so one waits while the other is being answered. A run that was due while the daemon was stopped happens once when the daemon starts.
+The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. Runs happen one at a time in their own queue, so a chat message is answered while a run is going. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 ```sh
 npm run job -- morning          # run a schedule now

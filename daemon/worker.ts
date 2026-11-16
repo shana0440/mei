@@ -3,7 +3,7 @@ import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
-import type { InboxEvent, Outcome } from "./inbox.ts";
+import type { InboxEvent, Lane, Outcome } from "./inbox.ts";
 import { chatSessionsDir, logsDir, root } from "./paths.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
@@ -67,13 +67,18 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
-export function startWorker(deps: Deps): () => void {
+function startLane(deps: Deps, lane: Lane): () => void {
   let working = false;
   async function work(): Promise<void> {
     if (working) return;
     working = true;
-    for (let event = nextPending(deps.db); event; event = nextPending(deps.db)) await handle(deps, event);
+    for (let event = nextPending(deps.db, lane); event; event = nextPending(deps.db, lane)) await handle(deps, event);
     working = false;
   }
   return () => void work();
+}
+
+export function startWorker(deps: Deps): () => void {
+  const wakeLanes = [startLane(deps, "chat"), startLane(deps, "jobs")];
+  return () => wakeLanes.forEach((wake) => wake());
 }
