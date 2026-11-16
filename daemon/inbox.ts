@@ -18,7 +18,7 @@ export type InboxEvent = {
   finishedAt: number | null;
 };
 
-type NewEvent = { type: string; payload: unknown; dedupeKey?: string };
+export type NewEvent = { type: string; payload: unknown; dedupeKey?: string };
 type Outcome = { result: string; sessionId: string; topic: string };
 
 const selectEvents = `

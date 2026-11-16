@@ -13,7 +13,7 @@ function outcome({ result, error }: InboxEvent): string {
 await runCommand(async () => {
   const { events } = await request({ type: "status" });
   console.log("daemon: running");
-  for (const event of events as InboxEvent[]) {
+  for (const event of events) {
     console.log(
       [`#${event.id}`, event.type, event.status, event.topic ?? "-", duration(event), outcome(event)].join("  ").trimEnd(),
     );

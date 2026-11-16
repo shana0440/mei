@@ -1,9 +1,11 @@
 import { connect } from "node:net";
 import { socketPath } from "./paths.ts";
+import type { Message, Reply, RequestType } from "./protocol.ts";
 
-type Line = any;
-
-export function request(message: unknown, onLine: (line: Line) => void = () => {}): Promise<Line> {
+export function request<T extends RequestType>(
+  message: Message<T>,
+  onLine: (line: unknown) => void = () => {},
+): Promise<Reply<T>> {
   return new Promise((resolve, reject) => {
     const connection = connect(socketPath);
     let received = "";
@@ -20,7 +22,7 @@ export function request(message: unknown, onLine: (line: Line) => void = () => {
       lines.slice(0, -2).forEach((line) => onLine(JSON.parse(line)));
     });
     connection.on("end", () => {
-      const reply = JSON.parse(received);
+      const reply: Reply<T> & { error?: string } = JSON.parse(received);
       if (reply.error) reject(new Error(reply.error));
       else resolve(reply);
     });
