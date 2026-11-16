@@ -5,4 +5,4 @@ model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; em
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
 
 [idle]
-after_minutes = 60       # a session this quiet is closed; a later message starts a new session
+after_minutes = 30       # a session this quiet is closed; a later message starts a new session
