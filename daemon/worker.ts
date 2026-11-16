@@ -1,11 +1,10 @@
-import { randomUUID } from "node:crypto";
 import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
-import { chatSessionsDir, jobSessionsDir, logsDir, root } from "./paths.ts";
+import { chatSessionsDir, logsDir, root } from "./paths.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
 import { recordActivity } from "./sessions.ts";
@@ -45,16 +44,13 @@ const handlers: Record<string, Handler | undefined> = {
   },
   "timer.fired": async (event, deps) => {
     const { name, prompt, model } = event.payload as { name: string; prompt: string; model: string };
-    const sessionId = randomUUID();
     const { ok, response, error } = await deps.run({
       prompt: readFileSync(join(root, prompt), "utf8"),
-      sessionId,
-      sessionDir: jobSessionsDir,
       model,
       logFile: join(logsDir, `${event.id}.jsonl`),
     });
     if (!ok) throw new Error(error);
-    return { result: response, sessionId, topic: name };
+    return { result: response, topic: name };
   },
 };
 

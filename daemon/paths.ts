@@ -6,7 +6,6 @@ const stateDir = resolve(process.env.MEI_STATE_DIR ?? join(root, "state"));
 export const dbPath = join(stateDir, "mei.db");
 export const socketPath = join(stateDir, "mei.sock");
 export const logsDir = join(stateDir, "logs");
-export const jobSessionsDir = join(stateDir, "sessions", "jobs");
 export const chatSessionsDir = join(stateDir, "sessions", "chat");
 export const configPath = join(root, "config.toml");
 export const routePromptPath = join(root, "prompts", "route.md");
