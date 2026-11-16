@@ -28,3 +28,7 @@ export function sessionsActiveSince(db: DatabaseSync, since: number): Session[] 
     )
     .all(since) as Session[];
 }
+
+export function saveSummary(db: DatabaseSync, id: string, summary: string, now: number): void {
+  db.prepare("UPDATE sessions SET summary = ?, summarized_at = ? WHERE id = ?").run(summary, now, id);
+}

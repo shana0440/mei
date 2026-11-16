@@ -1,13 +1,14 @@
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Lane, Outcome } from "./inbox.ts";
-import { chatSessionsDir, logsDir, root } from "./paths.ts";
+import { chatSessionsDir, logsDir, root, summarizePromptPath } from "./paths.ts";
+import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
-import { recordActivity } from "./sessions.ts";
+import { recordActivity, saveSummary } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 
 export type Deps = {
@@ -56,6 +57,22 @@ const handlers: Record<string, Handler | undefined> = {
     });
     if (!ok) throw new Error(error);
     return { result: response, topic: name };
+  },
+  "session.idle": async (event, deps) => {
+    const { sessionId } = event.payload as { sessionId: string };
+    const transcript = readdirSync(chatSessionsDir).find((file) => file.endsWith(`${sessionId}.jsonl`));
+    if (!transcript) throw new Error(`No transcript for session ${sessionId} in ${chatSessionsDir}`);
+    const { ok, response, error } = await deps.run({
+      prompt: fillPrompt(readFileSync(summarizePromptPath, "utf8"), {
+        transcript: join(chatSessionsDir, transcript),
+        now: new Date().toLocaleString(),
+      }),
+      model: deps.config.idle.model,
+      logFile: join(logsDir, `${event.id}.jsonl`),
+    });
+    if (!ok) throw new Error(error);
+    saveSummary(deps.db, sessionId, response, Date.now());
+    return { result: response, sessionId };
   },
 };
 

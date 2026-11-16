@@ -10,7 +10,7 @@ export type Schedule = { name: string; prompt: string; model: string; spec: Sche
 export type Config = {
   chat: { model: string };
   router: { model: string };
-  idle: { afterMinutes: number };
+  idle: { afterMinutes: number; model: string };
   schedules: Schedule[];
 };
 
@@ -77,7 +77,10 @@ export function loadConfig(path: string): Config {
     return {
       chat: { model: text(section(data, "chat"), "model") },
       router: { model: text(section(data, "router"), "model") },
-      idle: { afterMinutes: positiveNumber(section(data, "idle"), "after_minutes") },
+      idle: {
+        afterMinutes: positiveNumber(section(data, "idle"), "after_minutes"),
+        model: text(section(data, "idle"), "model"),
+      },
       schedules: schedules(data),
     };
   } catch (error) {
