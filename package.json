@@ -8,6 +8,7 @@
     "chat": "node daemon/chat.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-coding-agent": "^1.5.2",
     "smol-toml": "^1.9.1"
   }
 }

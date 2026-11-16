@@ -4,7 +4,7 @@ mei is a personal assistant that runs as a daemon on your machine.
 
 ## Usage
 
-Requires Node 24 and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider).
+Requires Node 24 and a model provider signed in through [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt). mei runs the agent with the Pi SDK and shares Pi-Bolt's settings, extensions and credentials.
 
 ```sh
 npm install
