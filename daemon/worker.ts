@@ -1,10 +1,10 @@
-import { appendFileSync } from "node:fs";
+import { appendFileSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
-import type { InboxEvent, Outcome } from "./inbox.ts";
-import { chatSessionsDir, logsDir } from "./paths.ts";
+import type { InboxEvent, Lane, Outcome } from "./inbox.ts";
+import { chatSessionsDir, logsDir, root } from "./paths.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
 import { recordActivity } from "./sessions.ts";
@@ -42,6 +42,16 @@ const handlers: Record<string, Handler | undefined> = {
     recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, Date.now());
     return { result: response, sessionId, topic };
   },
+  "timer.fired": async (event, deps) => {
+    const { name, prompt, model } = event.payload as { name: string; prompt: string; model: string };
+    const { ok, response, error } = await deps.run({
+      prompt: readFileSync(join(root, prompt), "utf8"),
+      model,
+      logFile: join(logsDir, `${event.id}.jsonl`),
+    });
+    if (!ok) throw new Error(error);
+    return { result: response, topic: name };
+  },
 };
 
 async function handle(deps: Deps, event: InboxEvent): Promise<void> {
@@ -57,13 +67,18 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
-export function startWorker(deps: Deps): () => void {
+function startLane(deps: Deps, lane: Lane): () => void {
   let working = false;
   async function work(): Promise<void> {
     if (working) return;
     working = true;
-    for (let event = nextPending(deps.db); event; event = nextPending(deps.db)) await handle(deps, event);
+    for (let event = nextPending(deps.db, lane); event; event = nextPending(deps.db, lane)) await handle(deps, event);
     working = false;
   }
   return () => void work();
+}
+
+export function startWorker(deps: Deps): () => void {
+  const wakeLanes = [startLane(deps, "chat"), startLane(deps, "jobs")];
+  return () => wakeLanes.forEach((wake) => wake());
 }
