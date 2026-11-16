@@ -106,6 +106,31 @@ At 03:00 local time, `dream` consolidates chat transcripts into notes and task f
 
 A failed run leaves `{{last_run}}` unchanged, so the next run covers the same transcripts again.
 
+## Running
+
+The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing works while it is stopped.
+
+| Command | What it does |
+|---|---|
+| `npm run daemon` | start the daemon in the foreground |
+| `npm run chat -- "<prompt>"` | send a message and print the answer |
+| `npm run status` | list schedules, closed sessions and recent messages |
+| `npm run job -- <schedule name>` | run a schedule now |
+
+To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
+
+```sh
+make install                    # with Nix: nix-shell --run "make install"
+mei "hi"
+journalctl --user -u mei        # what the daemon printed
+```
+
+`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
+
+`make uninstall` stops the service and removes both files.
+
+The full record of each answer and scheduled run is in `state/logs/`, described below.
+
 ## State
 
 Everything the daemon stores is under `state/`: the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.
