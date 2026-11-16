@@ -26,7 +26,7 @@ Messages are answered one at a time, oldest first. Each message starts a new con
 
 ```toml
 [chat]
-model = ""               # model for chat runs, as provider/id; empty uses Pi's default
+model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; empty uses Pi's default
 ```
 
 ## State
