@@ -1,0 +1,2 @@
+[chat]
+model = ""               # model for chat runs, as provider/id; empty uses Pi's default

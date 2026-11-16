@@ -6,5 +6,8 @@
     "daemon": "node daemon/main.ts",
     "status": "node daemon/status.ts",
     "chat": "node daemon/chat.ts"
+  },
+  "dependencies": {
+    "smol-toml": "^1.9.1"
   }
 }
