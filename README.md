@@ -83,7 +83,6 @@ name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
-backup_memory = true     # copy memory/ to state/backups/ before the run
 ```
 
 Every run starts a fresh conversation that is not kept. Prompt files can use `{{now}}`, `{{sessions_dir}}` (the absolute chat transcript directory), and `{{transcripts}}` (absolute paths of transcripts modified since that schedule's last successful run, one per line, or `none`). A prompt using `{{transcripts}}` is skipped with “nothing to do” when there are no new transcripts. A run that was due while the daemon was stopped happens once when the daemon starts.
@@ -97,7 +96,7 @@ npm run status                  # also lists each schedule with its next run
 
 At 03:00 local time, `dream` consolidates chat transcripts into notes and task files, updates `memory/MEMORY.md`, and proposes behaviour changes in `memory/PROPOSALS.md`. Review proposals in a later chat to approve them; dream leaves `AGENTS.md` and skills unchanged. Its instructions are in `prompts/dream.md`.
 
-Set `backup_memory = true` on a schedule to copy `memory/` to `state/backups/<YYYY-MM-DD-HHMMSS>/` before processing it, even if there is nothing new. Backup names use UTC; the ten newest copies are kept. To restore one, stop the daemon and replace `memory/` with that backup. Failed runs leave the transcript watermark unchanged, so the next run can retry.
+Failed runs leave the transcript watermark unchanged, so the next run can retry.
 
 ## State
 

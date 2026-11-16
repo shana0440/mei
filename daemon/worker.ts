@@ -1,10 +1,10 @@
-import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from "node:fs";
+import { appendFileSync, existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config, Schedule } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
-import { backupsDir, chatSessionsDir, logsDir, memoryDir, root, summarizePromptPath } from "./paths.ts";
+import { chatSessionsDir, logsDir, root, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
@@ -21,22 +21,6 @@ export type Deps = {
 };
 
 type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome>;
-
-function backupMemory(now: number): void {
-  mkdirSync(backupsDir, { recursive: true });
-  let destination: string;
-  do {
-    destination = join(backupsDir, new Date(now).toISOString().slice(0, 19).replace("T", "-").replaceAll(":", ""));
-    now += 1000;
-  } while (existsSync(destination));
-  cpSync(memoryDir, destination, { recursive: true, force: false, errorOnExist: true });
-  const backups = readdirSync(backupsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory() && /^\d{4}-\d{2}-\d{2}-\d{6}$/.test(entry.name))
-    .map((entry) => entry.name)
-    .sort()
-    .reverse();
-  for (const name of backups.slice(10)) rmSync(join(backupsDir, name), { recursive: true });
-}
 
 const handlers: Record<string, Handler | undefined> = {
   "user.message": async (event, deps) => {
@@ -66,9 +50,8 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: response, sessionId, topic };
   },
   "timer.fired": async (event, deps) => {
-    const { name, prompt, model, backup_memory } = event.payload as Omit<Schedule, "spec">;
+    const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
     const startedAt = Date.now();
-    if (backup_memory) backupMemory(startedAt);
     const template = readFileSync(join(root, prompt), "utf8");
     const key = `watermark:${name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);

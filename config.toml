@@ -16,4 +16,3 @@ name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
 model = "anthropic/claude-haiku-5-5"   # model for this job; empty or left out uses Pi's default
-backup_memory = true     # copy memory/ to state/backups/ before the run
