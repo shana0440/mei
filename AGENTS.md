@@ -8,28 +8,18 @@ Read `PROJECTS.md` before acting. It lists every location on this machine and it
 
 ## Memory
 
-mei's memory lives in `memory/`. Read `memory/MEMORY.md` and `memory/RECENT.md` at the start of every session.
+mei's memory lives in `memory/`. Read `memory/MEMORY.md` at the start of every session, then the files it lists that the message is about.
 
-Save what can't be looked up again. For what lives elsewhere, save a pointer: a line saying what it is and where to find it. `MEMORY.md` and `RECENT.md` are made of pointers.
+Save what can't be looked up again. For what lives elsewhere, save a pointer: a line saying what it is and where to find it. `MEMORY.md` is made of pointers.
 
 ### Working memory
 
-The session is the working memory. Each session covers one task; a new task starts a new session. Continuity between sessions comes from the files below, so save as you go:
+The session is the working memory. Each session covers one task: the daemon sends every message I write to the open session of the task it continues, and starts a new session for a new task. A session closes when it has been quiet for `[idle] after_minutes` in `config.toml`. When I come back to its task later, a new session starts, and it knows only what is in `memory/`. So save as you go:
 
 - Save my corrections to a note as soon as I give them.
 - Keep the task's progress file current, so a new session can continue from it.
 
-### Short-term memory
-
-`RECENT.md` holds one entry per recent session. Use it to tell which session a message belongs to. Each entry has:
-
-- Topic: a short name for the task, as the entry's heading.
-- Session: the session ID.
-- Status: `active` or `finished`.
-- Last active: date and time.
-- Summary: what I asked, what was decided, and what is left.
-
-Add the entry when the session starts, and update that same entry as the session continues. Transcripts are in the same directory as `$PI_SESSION_FILE`, the current session's transcript, and each file name ends with its session ID; read one when an entry needs more detail.
+Transcripts of earlier sessions are in the same directory as `$PI_SESSION_FILE`, the current session's transcript; read one when a memory file needs more detail.
 
 ### Long-term memory
 

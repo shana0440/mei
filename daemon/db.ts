@@ -16,6 +16,12 @@ export function openDb(path: string): DatabaseSync {
       created_at INTEGER NOT NULL,
       started_at INTEGER,
       finished_at INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS sessions (
+      id TEXT PRIMARY KEY,
+      topic TEXT NOT NULL,
+      last_event_id INTEGER NOT NULL,
+      last_active_at INTEGER NOT NULL
     )
   `);
   return db;

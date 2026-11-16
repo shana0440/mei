@@ -1,33 +1,46 @@
-import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, logsDir } from "./paths.ts";
+import { route } from "./router.ts";
 import type { run } from "./runner.ts";
+import { recordActivity } from "./sessions.ts";
 
 export type Deps = {
   db: DatabaseSync;
   config: Config;
   run: typeof run;
+  onLine: (eventId: number, line: string) => void;
   onFinished: (event: InboxEvent) => void;
 };
 
 type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome>;
 
 const handlers: Record<string, Handler | undefined> = {
-  "user.message": async (event, { config, run }) => {
+  "user.message": async (event, deps) => {
     const { text } = event.payload as { text: string };
-    const { ok, response, error, sessionId } = await run({
+    const logFile = join(logsDir, `${event.id}.jsonl`);
+    const onLine = (line: string) => deps.onLine(event.id, line);
+
+    const { sessionId, topic, isNew, reason } = await route(deps, text);
+    const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, isNew, reason });
+    appendFileSync(logFile, `${routeLine}\n`);
+    onLine(routeLine);
+
+    const { ok, response, error } = await deps.run({
       prompt: text,
-      sessionId: randomUUID(),
+      sessionId,
       sessionDir: chatSessionsDir,
-      model: config.chat.model,
-      logFile: join(logsDir, `${event.id}.jsonl`),
+      model: deps.config.chat.model,
+      logFile,
+      onLine,
     });
     if (!ok) throw new Error(error);
-    return { result: response, sessionId };
+    recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, Date.now());
+    return { result: response, sessionId, topic };
   },
 };
 
