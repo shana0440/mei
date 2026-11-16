@@ -10,21 +10,10 @@ model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into
 
 # Each [[schedule]] runs a prompt file on its own. It needs a unique name, a
 # prompt file relative to the project root, and exactly one of daily_at or
-# every_minutes. These two are examples: change or delete them.
-[[schedule]]
-name = "morning"
-prompt = "prompts/morning.md"
-daily_at = "08:00"       # local time HH:MM
-model = "anthropic/claude-haiku-5-5"   # model for this job; empty or left out uses Pi's default
-
-[[schedule]]
-name = "clock"
-prompt = "prompts/clock.md"
-every_minutes = 60
-model = "anthropic/claude-haiku-5-5"
-
+# every_minutes.
 [[schedule]]
 name = "dream"
 prompt = "prompts/dream.md"
-daily_at = "03:00"
-backup_memory = true
+daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
+model = "anthropic/claude-haiku-5-5"   # model for this job; empty or left out uses Pi's default
+backup_memory = true     # copy memory/ to state/backups/ before the run
