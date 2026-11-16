@@ -22,6 +22,7 @@ export function request<T extends RequestType>(
       lines.slice(0, -2).forEach((line) => onLine(JSON.parse(line)));
     });
     connection.on("end", () => {
+      if (!received) return reject(new Error("The mei daemon stopped before replying"));
       const reply: Reply<T> & { error?: string } = JSON.parse(received);
       if (reply.error) reject(new Error(reply.error));
       else resolve(reply);

@@ -1,7 +1,10 @@
 import { join, resolve } from "node:path";
 
-const root = join(import.meta.dirname, "..");
+export const root = join(import.meta.dirname, "..");
 
 export const stateDir = resolve(process.env.MEI_STATE_DIR ?? join(root, "state"));
 export const dbPath = join(stateDir, "mei.db");
 export const socketPath = join(stateDir, "mei.sock");
+export const logsDir = join(stateDir, "logs");
+export const chatSessionsDir = join(stateDir, "sessions", "chat");
+export const configPath = join(root, "config.toml");
