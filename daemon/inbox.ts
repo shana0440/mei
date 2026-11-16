@@ -16,7 +16,7 @@ export type InboxEvent = {
 };
 
 type NewEvent = { type: string; payload: unknown };
-type Outcome = { result: string; sessionId: string; topic: string };
+export type Outcome = { result: string; sessionId?: string; topic?: string };
 
 const selectEvents = `
   SELECT id, type, payload, status, attempts,
@@ -51,7 +51,7 @@ export function markRunning(db: DatabaseSync, id: number, now: number): void {
 export function markDone(db: DatabaseSync, id: number, { result, sessionId, topic }: Outcome, now: number): void {
   db.prepare(
     "UPDATE events SET status = 'done', result = ?, session_id = ?, topic = ?, finished_at = ? WHERE id = ?",
-  ).run(result, sessionId, topic, now, id);
+  ).run(result, sessionId ?? null, topic ?? null, now, id);
 }
 
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {
