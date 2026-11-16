@@ -73,7 +73,7 @@ The instructions for that decision are in `prompts/route.md`.
 
 ## Schedules
 
-mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships two examples, `morning` and `clock`; change or delete them.
+mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships two examples, `morning` and `clock`, and a nightly `dream` schedule; change or delete them.
 
 ```toml
 # Each [[schedule]] needs a unique name, a prompt file relative to the project
@@ -85,12 +85,22 @@ daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
+Every run starts a fresh conversation that is not kept. Prompt files can use `{{now}}`, `{{sessions_dir}}` (the absolute chat transcript directory), and `{{transcripts}}` (absolute paths of transcripts modified since that schedule's last successful run, one per line, or `none`). A prompt using `{{transcripts}}` is skipped with “nothing to do” when there are no new transcripts. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 ```sh
 npm run job -- morning          # run a schedule now
 npm run status                  # also lists each schedule with its next run
 ```
+
+### Dream
+
+At 03:00 local time, `dream` consolidates chat transcripts into notes and task files, updates `memory/MEMORY.md`, and proposes behaviour changes in `memory/PROPOSALS.md`. Review proposals in a later chat to approve them; dream leaves `AGENTS.md` and skills unchanged. Its instructions are in `prompts/dream.md`, and it uses Pi's default model.
+
+```sh
+npm run job -- dream            # consolidate now
+```
+
+Set `backup_memory = true` on a schedule to copy `memory/` to `state/backups/<YYYY-MM-DD-HHMMSS>/` before processing it, even if there is nothing new. Backup names use UTC; the ten newest copies are kept. To restore one, stop the daemon and replace `memory/` with that backup. Failed runs leave the transcript watermark unchanged, so the next run can retry.
 
 ## State
 

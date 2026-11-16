@@ -22,3 +22,9 @@ name = "clock"
 prompt = "prompts/clock.md"
 every_minutes = 60
 model = "anthropic/claude-haiku-5-5"
+
+[[schedule]]
+name = "dream"
+prompt = "prompts/dream.md"
+daily_at = "03:00"
+backup_memory = true
