@@ -33,6 +33,7 @@ const migrations = [
   `ALTER TABLE sessions ADD COLUMN summary TEXT;
    ALTER TABLE sessions ADD COLUMN summarized_at INTEGER`,
   "ALTER TABLE sessions ADD COLUMN context TEXT NOT NULL DEFAULT ''",
+  "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
 ];
 
 export function openDb(path: string): DatabaseSync {

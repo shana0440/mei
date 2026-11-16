@@ -73,24 +73,38 @@ The instructions for that decision are in `prompts/route.md`.
 
 ## Schedules
 
-mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships two examples, `morning` and `clock`; change or delete them.
+mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
 
 ```toml
 # Each [[schedule]] needs a unique name, a prompt file relative to the project
 # root, and exactly one of daily_at or every_minutes.
 [[schedule]]
-name = "morning"
-prompt = "prompts/morning.md"
-daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
+name = "dream"
+prompt = "prompts/dream.md"
+daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
+Every run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
+
+A prompt file is plain text. mei replaces these placeholders before the run, and any other `{{name}}` fails the run:
+
+| Placeholder | Replaced with |
+|---|---|
+| `{{now}}` | the current local date and time |
+| `{{last_run}}` | when this schedule last ran successfully, as a UTC timestamp like `2026-01-31T19:00:00.000Z`, or `never` |
+| `{{sessions_dir}}` | the absolute path of the directory holding one `.jsonl` transcript per chat session |
 
 ```sh
-npm run job -- morning          # run a schedule now
+npm run job -- dream            # run a schedule now
 npm run status                  # also lists each schedule with its next run
 ```
+
+### Dream
+
+At 03:00 local time, `dream` consolidates chat transcripts into notes and task files, updates `memory/MEMORY.md`, and proposes behaviour changes in `memory/PROPOSALS.md`. Review proposals in a later chat to approve them; dream leaves `AGENTS.md` and skills unchanged. Its instructions are in `prompts/dream.md`.
+
+A failed run leaves `{{last_run}}` unchanged, so the next run covers the same transcripts again.
 
 ## State
 

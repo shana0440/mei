@@ -1,7 +1,7 @@
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Config } from "./config.ts";
+import type { Config, Schedule } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, logsDir, root, summarizePromptPath } from "./paths.ts";
@@ -50,13 +50,24 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: response, sessionId, topic };
   },
   "timer.fired": async (event, deps) => {
-    const { name, prompt, model } = event.payload as { name: string; prompt: string; model: string };
+    const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
+    const startedAt = Date.now();
+    const template = readFileSync(join(root, prompt), "utf8");
+    const key = `watermark:${name}`;
+    const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
     const { ok, response, error } = await deps.run({
-      prompt: readFileSync(join(root, prompt), "utf8"),
+      prompt: fillPrompt(template, {
+        now: new Date(startedAt).toLocaleString(),
+        last_run: watermark ? new Date(watermark).toISOString() : "never",
+        sessions_dir: chatSessionsDir,
+      }),
       model,
       logFile: join(logsDir, `${event.id}.jsonl`),
     });
     if (!ok) throw new Error(error);
+    deps.db.prepare(
+      "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
+    ).run(key, String(startedAt));
     return { result: response, topic: name };
   },
   "session.idle": async (event, deps) => {

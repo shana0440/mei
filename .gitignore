@@ -1,4 +1,5 @@
 memory/*
+!memory/.gitkeep
 state/
 .agents/
 node_modules/
