@@ -1,13 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
-import { recentSessions } from "./inbox.ts";
+import { sessionsActiveSince } from "./inbox.ts";
 import { routePromptPath } from "./paths.ts";
 import type { Deps } from "./worker.ts";
 
 export type Route = { sessionId: string; topic: string; isNew: boolean; reason: string };
 type Answer = { session?: unknown; topic?: unknown; reason?: unknown };
 
-const candidateLimit = 10;
 const exchangeLength = 500;
 
 function cut(text: string, length: number): string {
@@ -32,7 +31,7 @@ function parseAnswer(response: string): Answer {
 }
 
 export async function route({ db, config, run }: Deps, text: string): Promise<Route> {
-  const sessions = recentSessions(db, candidateLimit);
+  const sessions = sessionsActiveSince(db, Date.now() - config.idle.afterMinutes * 60_000);
   const data = {
     message: text,
     sessions: sessions.map((session) => ({

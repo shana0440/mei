@@ -21,7 +21,7 @@ npm run status                  # list pending, running and recent messages
 
 Messages are answered one at a time, oldest first.
 
-mei keeps one conversation per task. For every message it decides whether you are continuing an earlier task or starting a new one, and prints the task's topic in brackets before the answer:
+mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic in brackets before the answer:
 
 ```
 $ npm run -s chat -- "Remember the word walrus for a word game. Reply ok."
@@ -35,6 +35,8 @@ $ npm run -s chat -- "Back to the word game: spell the word backwards."
 s-u-r-l-a-w
 ```
 
+A session stays open for an hour after its last message (`[idle] after_minutes`). After that a message on the same subject starts a new session, which does not see the old conversation. This keeps sessions short, so a message never pays to reload a long conversation whose prompt cache has expired.
+
 The topic and the debug output go to stderr, so `npm run -s chat -- "hi" 2>/dev/null` prints the answer alone. Ctrl-C stops waiting; the message is still answered, and `npm run status` shows the result.
 
 ## Configuration
@@ -47,6 +49,9 @@ model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; em
 
 [router]
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
+
+[idle]
+after_minutes = 60       # a session this quiet is closed; a later message starts a new session
 ```
 
 The instructions for that decision are in `prompts/route.md`.
