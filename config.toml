@@ -6,3 +6,18 @@ model = "anthropic/claude-haiku-5-5"   # model that decides which session a mess
 
 [idle]
 after_minutes = 30       # a session this quiet is closed; a later message starts a new session
+
+# Each [[schedule]] runs a prompt file on its own. It needs a unique name, a
+# prompt file relative to the project root, and exactly one of daily_at or
+# every_minutes. These two are examples: change or delete them.
+[[schedule]]
+name = "morning"
+prompt = "prompts/morning.md"
+daily_at = "08:00"       # local time HH:MM
+model = "anthropic/claude-haiku-5-5"   # model for this job; empty or left out uses Pi's default
+
+[[schedule]]
+name = "clock"
+prompt = "prompts/clock.md"
+every_minutes = 60
+model = "anthropic/claude-haiku-5-5"

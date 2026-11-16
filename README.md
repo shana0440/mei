@@ -4,7 +4,7 @@ mei is a personal assistant that runs as a daemon on your machine.
 
 ## Usage
 
-Requires Node 24 and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider).
+Requires Node 24 and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider). With Nix, `nix-shell` provides both.
 
 ```sh
 npm install
@@ -58,7 +58,7 @@ The instructions for that decision are in `prompts/route.md`.
 
 ## Schedules
 
-mei runs a prompt on a schedule when `config.toml` has a block for it:
+mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships two examples, `morning` and `clock`; change or delete them.
 
 ```toml
 # Each [[schedule]] needs a unique name, a prompt file relative to the project
@@ -70,8 +70,13 @@ daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt, and every run starts a fresh session. A run that was due while the daemon was stopped happens once when the daemon starts.
+The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. Runs share the queue with chat messages, so one waits while the other is being answered. A run that was due while the daemon was stopped happens once when the daemon starts.
+
+```sh
+npm run job -- morning          # run a schedule now
+npm run status                  # also lists each schedule with its next run
+```
 
 ## State
 
-Everything the daemon stores is under `state/`: the message history in `mei.db`, the conversations in `sessions/chat/`, the scheduled runs in `sessions/jobs/`, and the routing decision and full event stream of each answer in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.
+Everything the daemon stores is under `state/`: the message history in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.
