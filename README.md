@@ -56,6 +56,22 @@ after_minutes = 30       # a session this quiet is closed; a later message start
 
 The instructions for that decision are in `prompts/route.md`.
 
+## Schedules
+
+mei runs a prompt on a schedule when `config.toml` has a block for it:
+
+```toml
+# Each [[schedule]] needs a unique name, a prompt file relative to the project
+# root, and exactly one of daily_at or every_minutes.
+[[schedule]]
+name = "morning"
+prompt = "prompts/morning.md"
+daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
+model = ""               # model for this job; empty uses Pi's default
+```
+
+The text of the prompt file is the prompt, and every run starts a fresh session. A run that was due while the daemon was stopped happens once when the daemon starts.
+
 ## State
 
-Everything the daemon stores is under `state/`: the message history in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.
+Everything the daemon stores is under `state/`: the message history in `mei.db`, the conversations in `sessions/chat/`, the scheduled runs in `sessions/jobs/`, and the routing decision and full event stream of each answer in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.

@@ -7,8 +7,11 @@ import { addEvent, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { configPath, dbPath, logsDir, socketPath } from "./paths.ts";
 import { run } from "./runner.ts";
+import { startScheduler } from "./scheduler.ts";
 import { startServer } from "./server.ts";
+import { syncSchedules } from "./timers.ts";
 import { startWorker } from "./worker.ts";
+import type { Deps } from "./worker.ts";
 
 const maxAttempts = 3;
 
@@ -17,13 +20,14 @@ await runCommand(async () => {
   mkdirSync(logsDir, { recursive: true });
   const db = openDb(dbPath);
   const progress = new EventEmitter();
-  const wake = startWorker({
+  const deps: Deps = {
     db,
     config,
     run,
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
     onFinished: (event) => progress.emit(`finished:${event.id}`, event),
-  });
+  };
+  const wake = startWorker(deps);
 
   await startServer(socketPath, {
     chat: async ({ text, debug }, send) => {
@@ -39,6 +43,8 @@ await runCommand(async () => {
   });
 
   recoverRunning(db, maxAttempts, Date.now());
+  syncSchedules(db, config.schedules, Date.now());
   wake();
+  startScheduler(deps, wake);
   console.log("mei daemon started");
 });
