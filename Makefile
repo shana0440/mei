@@ -34,7 +34,9 @@ install:
 	printf '%s\n' "$$SERVICE_FILE" > $(SERVICE)
 	printf '%s\n' "$$COMMAND_FILE" > $(COMMAND)
 	chmod +x $(COMMAND)
-	@echo "Installed. Start mei with: systemctl --user daemon-reload && systemctl --user enable --now mei"
+	systemctl --user daemon-reload
+	systemctl --user enable mei
+	systemctl --user restart mei
 
 uninstall:
 	-systemctl --user disable --now mei

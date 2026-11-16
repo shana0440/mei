@@ -121,13 +121,11 @@ To keep the daemon running whenever you are logged in, and to chat from any dire
 
 ```sh
 make install                    # with Nix: nix-shell --run "make install"
-systemctl --user daemon-reload
-systemctl --user enable --now mei
 mei "hi"
 journalctl --user -u mei        # what the daemon printed
 ```
 
-`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout. The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed, then `systemctl --user daemon-reload` and `systemctl --user restart mei`.
+`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
 
 `make uninstall` stops the service and removes both files.
 
