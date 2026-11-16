@@ -9,3 +9,4 @@ export const logsDir = join(stateDir, "logs");
 export const chatSessionsDir = join(stateDir, "sessions", "chat");
 export const configPath = join(root, "config.toml");
 export const routePromptPath = join(root, "prompts", "route.md");
+export const summarizePromptPath = join(root, "prompts", "summarize.md");

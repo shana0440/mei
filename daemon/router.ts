@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { routePromptPath } from "./paths.ts";
-import { sessionsActiveSince } from "./sessions.ts";
+import { closedSessions, sessionsActiveSince } from "./sessions.ts";
+import type { ClosedSession } from "./sessions.ts";
 import type { Deps } from "./worker.ts";
 
-export type Route = { sessionId: string; topic: string; isNew: boolean; reason: string };
-type Answer = { session?: unknown; topic?: unknown; reason?: unknown };
+export type Route = { sessionId: string; topic: string; isNew: boolean; reason: string; context: string };
+type Answer = { session?: unknown; continues?: unknown; topic?: unknown; reason?: unknown };
 
 const exchangeLength = 500;
+const day = 24 * 60 * 60_000;
+const offeredDays = 30;
+const contextDays = 7;
 
 function cut(text: string, length: number): string {
   return text.length > length ? `${text.slice(0, length)}…` : text;
@@ -15,10 +19,6 @@ function cut(text: string, length: number): string {
 
 function firstWords(text: string): string {
   return text.split(/\s+/).slice(0, 6).join(" ");
-}
-
-function newSession(topic: string, reason: string): Route {
-  return { sessionId: randomUUID(), topic, isNew: true, reason };
 }
 
 function parseAnswer(response: string): Answer {
@@ -30,8 +30,31 @@ function parseAnswer(response: string): Answer {
   }
 }
 
+function shortTermMemory(closed: ClosedSession[], continued: ClosedSession | undefined, now: number): string {
+  const recent = closed.filter((session) => session !== continued && session.closedAt >= now - contextDays * day);
+  const parts = [
+    continued && `This session continues the closed session "${continued.topic}". Where it stood:\n${continued.summary}`,
+    recent.length > 0 &&
+      `Other sessions that closed in the last ${contextDays} days, newest first:\n` +
+        recent
+          .map(({ topic, closedAt, summary }) => `- ${topic} (closed ${new Date(closedAt).toLocaleString()}): ${summary}`)
+          .join("\n"),
+  ].filter(Boolean);
+  return parts.length > 0 ? ["## Short-term memory", ...parts].join("\n\n") : "";
+}
+
 export async function route({ db, config, run }: Deps, text: string): Promise<Route> {
-  const sessions = sessionsActiveSince(db, Date.now() - config.idle.afterMinutes * 60_000);
+  const now = Date.now();
+  const sessions = sessionsActiveSince(db, now - config.idle.afterMinutes * 60_000);
+  const closed = closedSessions(db, now - offeredDays * day);
+  const newSession = (topic: string, reason: string, continued?: ClosedSession): Route => ({
+    sessionId: randomUUID(),
+    topic,
+    isNew: true,
+    reason,
+    context: shortTermMemory(closed, continued, now),
+  });
+
   const data = {
     message: text,
     sessions: sessions.map((session) => ({
@@ -41,6 +64,7 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
       lastMessage: cut(session.lastMessage, exchangeLength),
       lastReply: cut(session.lastReply, exchangeLength),
     })),
+    closed: closed.map(({ id, topic, summary }) => ({ id, topic, summary })),
   };
   const { ok, response, error } = await run({
     prompt: readFileSync(routePromptPath, "utf8") + JSON.stringify(data, null, 2),
@@ -53,8 +77,11 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
   const answer = parseAnswer(response);
   const topic = typeof answer.topic === "string" && answer.topic ? answer.topic : firstWords(text);
   const reason = typeof answer.reason === "string" ? answer.reason : "";
-  if (answer.session === "new") return newSession(topic, reason);
+  if (answer.session === "new") {
+    const continued = closed.find(({ id }) => id === answer.continues);
+    return newSession(continued?.topic ?? topic, reason, continued);
+  }
   const session = sessions.find(({ id }) => id === answer.session);
   if (!session) return newSession(firstWords(text), `The router gave no usable answer: ${cut(response, 200)}`);
-  return { sessionId: session.id, topic: session.topic, isNew: false, reason };
+  return { sessionId: session.id, topic: session.topic, isNew: false, reason, context: session.context };
 }

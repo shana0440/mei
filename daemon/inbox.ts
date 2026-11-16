@@ -38,11 +38,8 @@ export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: num
   return Number(lastInsertRowid);
 }
 
-const lanes = { chat: "type = 'user.message'", jobs: "type != 'user.message'" };
-export type Lane = keyof typeof lanes;
-
-export function nextPending(db: DatabaseSync, lane: Lane): InboxEvent | undefined {
-  return findEvents(db, `WHERE status = 'pending' AND ${lanes[lane]} ORDER BY id LIMIT 1`)[0];
+export function nextPending(db: DatabaseSync): InboxEvent | undefined {
+  return findEvents(db, "WHERE status = 'pending' ORDER BY id LIMIT 1")[0];
 }
 
 export function markRunning(db: DatabaseSync, id: number, now: number): void {

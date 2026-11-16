@@ -1,18 +1,21 @@
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
-import type { InboxEvent, Lane, Outcome } from "./inbox.ts";
-import { chatSessionsDir, logsDir, root } from "./paths.ts";
+import type { InboxEvent, Outcome } from "./inbox.ts";
+import { chatSessionsDir, logsDir, root, summarizePromptPath } from "./paths.ts";
+import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
-import { recordActivity } from "./sessions.ts";
+import { recordActivity, saveSummary } from "./sessions.ts";
+import { setIdleTimer } from "./timers.ts";
 
 export type Deps = {
   db: DatabaseSync;
   config: Config;
   run: typeof run;
+  rearm: () => void;
   onLine: (eventId: number, line: string) => void;
   onFinished: (event: InboxEvent) => void;
 };
@@ -25,7 +28,7 @@ const handlers: Record<string, Handler | undefined> = {
     const logFile = join(logsDir, `${event.id}.jsonl`);
     const onLine = (line: string) => deps.onLine(event.id, line);
 
-    const { sessionId, topic, isNew, reason } = await route(deps, text);
+    const { sessionId, topic, isNew, reason, context } = await route(deps, text);
     const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, isNew, reason });
     appendFileSync(logFile, `${routeLine}\n`);
     onLine(routeLine);
@@ -35,11 +38,15 @@ const handlers: Record<string, Handler | undefined> = {
       sessionId,
       sessionDir: chatSessionsDir,
       model: deps.config.chat.model,
+      appendSystemPrompt: context,
       logFile,
       onLine,
     });
     if (!ok) throw new Error(error);
-    recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, Date.now());
+    const now = Date.now();
+    recordActivity(deps.db, { id: sessionId, topic, context, eventId: event.id }, now);
+    setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
+    deps.rearm();
     return { result: response, sessionId, topic };
   },
   "timer.fired": async (event, deps) => {
@@ -51,6 +58,22 @@ const handlers: Record<string, Handler | undefined> = {
     });
     if (!ok) throw new Error(error);
     return { result: response, topic: name };
+  },
+  "session.idle": async (event, deps) => {
+    const { sessionId } = event.payload as { sessionId: string };
+    const transcript = readdirSync(chatSessionsDir).find((file) => file.endsWith(`${sessionId}.jsonl`));
+    if (!transcript) throw new Error(`No transcript for session ${sessionId} in ${chatSessionsDir}`);
+    const { ok, response, error } = await deps.run({
+      prompt: fillPrompt(readFileSync(summarizePromptPath, "utf8"), {
+        transcript: join(chatSessionsDir, transcript),
+        now: new Date().toLocaleString(),
+      }),
+      model: deps.config.idle.model,
+      logFile: join(logsDir, `${event.id}.jsonl`),
+    });
+    if (!ok) throw new Error(error);
+    saveSummary(deps.db, sessionId, response, Date.now());
+    return { result: response, sessionId };
   },
 };
 
@@ -67,18 +90,13 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
-function startLane(deps: Deps, lane: Lane): () => void {
+export function startWorker(deps: Deps): () => void {
   let working = false;
   async function work(): Promise<void> {
     if (working) return;
     working = true;
-    for (let event = nextPending(deps.db, lane); event; event = nextPending(deps.db, lane)) await handle(deps, event);
+    for (let event = nextPending(deps.db); event; event = nextPending(deps.db)) await handle(deps, event);
     working = false;
   }
   return () => void work();
-}
-
-export function startWorker(deps: Deps): () => void {
-  const wakeLanes = [startLane(deps, "chat"), startLane(deps, "jobs")];
-  return () => wakeLanes.forEach((wake) => wake());
 }

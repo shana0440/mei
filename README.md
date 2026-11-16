@@ -16,10 +16,10 @@ With the daemon running, in another terminal:
 ```sh
 npm run chat -- "hi"            # send mei a message and print its answer
 npm run chat -- --debug "hi"    # also show where the message went and the work as it happens
-npm run status                  # list pending, running and recent messages
+npm run status                  # list pending, running and recent messages, and recently closed sessions
 ```
 
-Messages are answered one at a time, oldest first.
+mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
 
 mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic in brackets before the answer:
 
@@ -35,7 +35,21 @@ $ npm run -s chat -- "Back to the word game: spell the word backwards."
 s-u-r-l-a-w
 ```
 
-A session stays open for 30 minutes after its last message (`[idle] after_minutes`). After that a message on the same subject starts a new session, which does not see the old conversation. This keeps sessions short, so a message never pays to reload a long conversation whose prompt cache has expired.
+A session stays open for 30 minutes after its last message (`[idle] after_minutes`). After that the session is closed, and a message on the same subject starts a new session, which does not see the old conversation. This keeps sessions short, so a message never pays to reload a long conversation whose prompt cache has expired.
+
+A subject outlives its sessions through memory. When a session closes, mei saves what is worth keeping to `memory/` and writes a short summary of the session. A new session is given the summaries of the sessions closed in the last seven days, so coming back to a subject picks up where it stood:
+
+```
+$ npm run -s chat -- "Plan a three-day trip to Kyoto. One theme per day."
+[Kyoto trip plan]
+Day 1: temples ...
+$ # more than 30 minutes later
+$ npm run -s chat -- "For the Kyoto trip, swap day one and day three."
+[Kyoto trip plan]
+Day 1 is now ...
+```
+
+The instructions for writing a session into memory are in `prompts/summarize.md`.
 
 The topic and the debug output go to stderr, so `npm run -s chat -- "hi" 2>/dev/null` prints the answer alone. Ctrl-C stops waiting; the message is still answered, and `npm run status` shows the result.
 
@@ -51,7 +65,8 @@ model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; em
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
 
 [idle]
-after_minutes = 30       # a session this quiet is closed; a later message starts a new session
+after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
+model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
 ```
 
 The instructions for that decision are in `prompts/route.md`.
@@ -70,7 +85,7 @@ daily_at = "08:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
 ```
 
-The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. Runs happen one at a time in their own queue, so a chat message is answered while a run is going. A run that was due while the daemon was stopped happens once when the daemon starts.
+The text of the prompt file is the prompt. Every run starts from nothing: it sees no earlier run and no chat, and its conversation is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 ```sh
 npm run job -- morning          # run a schedule now
@@ -79,4 +94,4 @@ npm run status                  # also lists each schedule with its next run
 
 ## State
 
-Everything the daemon stores is under `state/`: the message history in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.
+Everything the daemon stores is under `state/`: the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. Set `MEI_STATE_DIR` to keep it somewhere else.

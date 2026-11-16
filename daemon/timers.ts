@@ -5,12 +5,10 @@ import { addEvent } from "./inbox.ts";
 export type Timer = {
   id: number;
   name: string;
-  kind: "schedule";
-  spec: ScheduleSpec;
   payload: unknown;
   dueAt: number;
   status: "active" | "done";
-};
+} & ({ kind: "schedule"; spec: ScheduleSpec } | { kind: "idle"; spec: {} });
 
 function findTimers(db: DatabaseSync, where: string, ...params: number[]): Timer[] {
   return db
@@ -46,6 +44,13 @@ export function syncSchedules(db: DatabaseSync, schedules: Schedule[], now: numb
   );
 }
 
+export function setIdleTimer(db: DatabaseSync, sessionId: string, dueAt: number): void {
+  db.prepare(
+    `INSERT INTO timers (name, kind, spec, payload, due_at, status) VALUES (?, 'idle', '{}', ?, ?, 'active')
+     ON CONFLICT (name) DO UPDATE SET due_at = excluded.due_at, status = 'active'`,
+  ).run(`idle:${sessionId}`, JSON.stringify({ sessionId }), dueAt);
+}
+
 export function listTimers(db: DatabaseSync): Timer[] {
   return findTimers(db, "WHERE status = 'active'");
 }
@@ -61,8 +66,13 @@ export function earliestDue(db: DatabaseSync): number | undefined {
 export function fire(db: DatabaseSync, timer: Timer, now: number): void {
   db.exec("BEGIN");
   try {
-    addEvent(db, { type: "timer.fired", payload: timer.payload }, now);
-    db.prepare("UPDATE timers SET due_at = ? WHERE id = ?").run(nextDue(timer.spec, now), timer.id);
+    if (timer.kind === "idle") {
+      addEvent(db, { type: "session.idle", payload: timer.payload }, now);
+      db.prepare("UPDATE timers SET status = 'done' WHERE id = ?").run(timer.id);
+    } else {
+      addEvent(db, { type: "timer.fired", payload: timer.payload }, now);
+      db.prepare("UPDATE timers SET due_at = ? WHERE id = ?").run(nextDue(timer.spec, now), timer.id);
+    }
     db.exec("COMMIT");
   } catch (error) {
     db.exec("ROLLBACK");

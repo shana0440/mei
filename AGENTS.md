@@ -14,12 +14,16 @@ Save what can't be looked up again. For what lives elsewhere, save a pointer: a 
 
 ### Working memory
 
-The session is the working memory. Each session covers one task: the daemon sends every message I write to the open session of the task it continues, and starts a new session for a new task. A session closes when it has been quiet for `[idle] after_minutes` in `config.toml`. When I come back to its task later, a new session starts, and it knows only what is in `memory/`. So save as you go:
+The session is the working memory. Each session covers one task: the daemon sends every message I write to the open session of the task it continues, and starts a new session for a new task. A session closes when it has been quiet for `[idle] after_minutes` in `config.toml`. When I come back to its task later, a new session starts, and it knows only the short-term memory below and what is in `memory/`. So save as you go:
 
 - Save my corrections to a note as soon as I give them.
 - Keep the task's progress file current, so a new session can continue from it.
 
 Transcripts of earlier sessions are in the same directory as `$PI_SESSION_FILE`, the current session's transcript; read one when a memory file needs more detail.
+
+### Short-term memory
+
+When a session closes, the daemon writes a summary of it. A new session gets the summaries of the sessions closed in the last seven days under "Short-term memory" in its instructions, starting with the session it continues. Use them to know what I have been working on, and read the memory files they name before you answer.
 
 ### Long-term memory
 

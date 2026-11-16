@@ -10,6 +10,7 @@ export type RunOptions = {
   model?: string;
   tools?: boolean;
   contextFiles?: boolean;
+  appendSystemPrompt?: string;
   logFile?: string;
   onLine?: (line: string) => void;
   cwd?: string;
@@ -47,6 +48,7 @@ function runArgs(options: RunOptions): string[] {
     ...(options.model ? ["--model", options.model] : []),
     ...(options.tools === false ? ["--no-tools"] : []),
     ...(options.contextFiles === false ? ["--no-context-files"] : []),
+    ...(options.appendSystemPrompt ? ["--append-system-prompt", options.appendSystemPrompt] : []),
     "--",
     options.prompt,
   ];
