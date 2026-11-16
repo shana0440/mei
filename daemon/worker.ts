@@ -8,11 +8,13 @@ import { chatSessionsDir, logsDir, root } from "./paths.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
 import { recordActivity } from "./sessions.ts";
+import { setIdleTimer } from "./timers.ts";
 
 export type Deps = {
   db: DatabaseSync;
   config: Config;
   run: typeof run;
+  rearm: () => void;
   onLine: (eventId: number, line: string) => void;
   onFinished: (event: InboxEvent) => void;
 };
@@ -39,7 +41,10 @@ const handlers: Record<string, Handler | undefined> = {
       onLine,
     });
     if (!ok) throw new Error(error);
-    recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, Date.now());
+    const now = Date.now();
+    recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, now);
+    setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
+    deps.rearm();
     return { result: response, sessionId, topic };
   },
   "timer.fired": async (event, deps) => {
