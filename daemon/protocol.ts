@@ -1,7 +1,7 @@
 import type { InboxEvent } from "./inbox.ts";
 
 export type Requests = {
-  chat: { message: { text: string }; reply: { id: number } };
+  chat: { message: { text: string }; reply: { result: string } };
   status: { message: {}; reply: { events: InboxEvent[] } };
 };
 
