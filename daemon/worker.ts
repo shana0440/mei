@@ -7,6 +7,7 @@ import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, logsDir } from "./paths.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
+import { recordActivity } from "./sessions.ts";
 
 export type Deps = {
   db: DatabaseSync;
@@ -38,6 +39,7 @@ const handlers: Record<string, Handler | undefined> = {
       onLine,
     });
     if (!ok) throw new Error(error);
+    recordActivity(deps.db, { id: sessionId, topic, eventId: event.id }, Date.now());
     return { result: response, sessionId, topic };
   },
 };
