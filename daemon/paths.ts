@@ -8,7 +8,6 @@ export const templateDir = join(root, "template");
 export const configPath = join(home, "config.toml");
 export const projectsPath = join(home, "PROJECTS.md");
 export const characterPath = join(home, "CHARACTER.md");
-export const voicePromptPath = join(root, "prompts", "voice.md");
 export const routePromptPath = join(root, "prompts", "route.md");
 export const summarizePromptPath = join(home, "prompts", "summarize.md");
 

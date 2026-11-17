@@ -108,9 +108,9 @@ Each message goes through up to three runs:
 
 1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder until it closes; a session that continues a closed one gets a fresh pick.
 2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
-3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks, seeing the last two exchanges of the session. It has no tools and keeps code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks, seeing the last two exchanges of the session. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
 
-Memory is written from the working agent's transcript, so it holds the original answers. The voice's instructions are in `prompts/voice.md`. The instructions for the router's decision are in `prompts/route.md` in this checkout.
+Memory is written from the working agent's transcript, so it holds the original answers. The voice follows `CHARACTER.md` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
 ## Schedules
 
