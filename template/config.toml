@@ -28,7 +28,8 @@ model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into
 # or both: the command's stdout goes to the prompt as {{output}}. It needs a
 # unique name, a prompt (a file relative to this directory), a command (run
 # with sh -c here, stopped after timeout_minutes, default 10) or both, and
-# exactly one of daily_at or every_minutes.
+# exactly one of daily_at or every_minutes. enabled = false keeps a block
+# without it firing; mei schedule disable and enable set it.
 [[schedule]]
 name = "dream"
 prompt = "prompts/dream.md"

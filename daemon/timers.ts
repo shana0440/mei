@@ -28,7 +28,8 @@ export function nextDue(spec: ScheduleSpec, now: number): number {
   return due.getTime();
 }
 
-export function syncSchedules(db: DatabaseSync, schedules: Schedule[], now: number): void {
+export function syncSchedules(db: DatabaseSync, configured: Schedule[], now: number): void {
+  const schedules = configured.filter(({ enabled }) => enabled);
   const upsert = db.prepare(
     `INSERT INTO timers (name, kind, spec, payload, due_at, status) VALUES (?, 'schedule', ?, ?, ?, 'active')
      ON CONFLICT (name) DO UPDATE SET
@@ -36,7 +37,7 @@ export function syncSchedules(db: DatabaseSync, schedules: Schedule[], now: numb
        payload = excluded.payload,
        due_at = CASE WHEN spec = excluded.spec THEN due_at ELSE excluded.due_at END`,
   );
-  for (const { spec, ...payload } of schedules) {
+  for (const { spec, enabled, ...payload } of schedules) {
     upsert.run(payload.name, JSON.stringify(spec), JSON.stringify(payload), nextDue(spec, now));
   }
   db.prepare("DELETE FROM timers WHERE kind = 'schedule' AND name NOT IN (SELECT value FROM json_each(?))").run(

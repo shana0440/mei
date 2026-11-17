@@ -30,6 +30,7 @@ const scheduleTable = table({
   command: text.optional(),
   timeout_minutes: positiveNumber.optional(),
   notify: flag.default(true),
+  enabled: flag.default(true),
 });
 
 type ScheduleTable = z.output<typeof scheduleTable>;
@@ -94,6 +95,7 @@ function settings(
   const schedules = schedule.map((table, index) => ({
     ...scheduledJob(table, models, router.default_role, fail(["schedule", index])),
     spec: spec(table, fail(["schedule", index])),
+    enabled: table.enabled,
   }));
   schedules.forEach(({ name }, index) => {
     if (schedules.findIndex((other) => other.name === name) < index) {
@@ -153,9 +155,13 @@ function within(tablePath: PropertyKey[], message: string, data: TomlTable): str
 }
 
 export function loadConfig(path: string): Config {
+  return parseConfig(readFileSync(path, "utf8"), path);
+}
+
+export function parseConfig(text: string, path: string): Config {
   let data: TomlTable;
   try {
-    data = parse(readFileSync(path, "utf8"));
+    data = parse(text);
   } catch (error) {
     throw new Error(`${path}: ${(error as Error).message}`);
   }
