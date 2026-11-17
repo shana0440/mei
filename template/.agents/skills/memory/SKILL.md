@@ -13,6 +13,6 @@ Long-term memory is the files in `memory/`:
 
 Save what can't be looked up again. For what lives elsewhere, save a pointer: a line saying what it is and where to find it.
 
-Name every note and task file with its creation date first, as `YYYY-MM-DD-<name>.md`, and start it with the date and time it was created and last updated, right under the title.
+Start every note and task file with the date and time it was created and last updated, right under the title.
 
 After a change, make `MEMORY.md` match the files that exist.
