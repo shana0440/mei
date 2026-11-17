@@ -4,7 +4,7 @@ import type { DatabaseSync } from "node:sqlite";
 import type { Config, Schedule } from "./config.ts";
 import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
-import { chatSessionsDir, logsDir, root, summarizePromptPath } from "./paths.ts";
+import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import type { run } from "./runner.ts";
@@ -52,7 +52,7 @@ const handlers: Record<string, Handler | undefined> = {
   "timer.fired": async (event, deps) => {
     const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
     const startedAt = Date.now();
-    const template = readFileSync(join(root, prompt), "utf8");
+    const template = readFileSync(join(home, prompt), "utf8");
     const key = `watermark:${name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
     const { ok, response, error } = await deps.run({

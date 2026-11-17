@@ -1,5 +1,2 @@
-memory/*
-!memory/.gitkeep
-state/
-.agents/
+/.agents/
 node_modules/

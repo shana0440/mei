@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
-import { root } from "./paths.ts";
+import { home } from "./paths.ts";
 
 export type RunOptions = {
   prompt: string;
@@ -13,7 +13,6 @@ export type RunOptions = {
   appendSystemPrompt?: string;
   logFile?: string;
   onLine?: (line: string) => void;
-  cwd?: string;
 };
 
 export type RunResult = { ok: boolean; response: string; error: string; sessionId: string };
@@ -78,7 +77,7 @@ export async function run(options: RunOptions): Promise<RunResult> {
   if (logFile) mkdirSync(dirname(logFile), { recursive: true });
 
   const child = spawn("pi-bolt", runArgs(options), {
-    cwd: options.cwd ?? root,
+    cwd: home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exitFailure = new Promise<string | undefined>((resolve) => {
