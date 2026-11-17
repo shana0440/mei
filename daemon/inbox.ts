@@ -1,10 +1,14 @@
 import type { DatabaseSync } from "node:sqlite";
 
+export type Step = "command" | "agent";
+
 export type InboxEvent = {
   id: number;
   type: string;
   payload: unknown;
   status: "pending" | "running" | "done" | "failed";
+  step: Step;
+  commandOutput: string | null;
   attempts: number;
   sessionId: string | null;
   topic: string | null;
@@ -15,11 +19,11 @@ export type InboxEvent = {
   finishedAt: number | null;
 };
 
-type NewEvent = { type: string; payload: unknown };
+export type NewEvent = { type: string; payload: unknown; step: Step };
 export type Outcome = { result: string; sessionId?: string; topic?: string };
 
 const selectEvents = `
-  SELECT id, type, payload, status, attempts,
+  SELECT id, type, payload, status, step, command_output AS commandOutput, attempts,
     session_id AS sessionId, topic, result, error,
     created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt
   FROM events`;
@@ -31,17 +35,24 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
     .map((row) => ({ ...row, payload: JSON.parse(row.payload as string) }) as InboxEvent);
 }
 
-export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: number): number {
+export function addEvent(db: DatabaseSync, { type, payload, step }: NewEvent, now: number): number {
   const { lastInsertRowid } = db
-    .prepare(`INSERT INTO events (id, type, payload, status, created_at)
+    .prepare(`INSERT INTO events (id, type, payload, status, step, created_at)
       SELECT COALESCE(MAX(id), (SELECT CAST(value AS INTEGER) FROM kv WHERE key = 'eventId'), 0) + 1,
-        ?, ?, 'pending', ? FROM events`)
-    .run(type, JSON.stringify(payload), now);
+        ?, ?, 'pending', ?, ? FROM events`)
+    .run(type, JSON.stringify(payload), step, now);
   return Number(lastInsertRowid);
 }
 
-export function pendingEvents(db: DatabaseSync): InboxEvent[] {
-  return findEvents(db, "WHERE status = 'pending' ORDER BY id");
+export function pendingCommands(db: DatabaseSync): InboxEvent[] {
+  return findEvents(db, "WHERE status = 'pending' AND step = 'command' ORDER BY id");
+}
+
+export function nextForAgent(db: DatabaseSync): InboxEvent | undefined {
+  return findEvents(
+    db,
+    "WHERE status = 'pending' AND step = 'agent' ORDER BY type = 'user.message' DESC, id LIMIT 1",
+  )[0];
 }
 
 export function markRunning(db: DatabaseSync, id: number, now: number): void {
@@ -57,7 +68,9 @@ export function markDone(db: DatabaseSync, id: number, { result, sessionId, topi
 }
 
 export function queueForAgent(db: DatabaseSync, id: number, commandOutput: string): void {
-  db.prepare("UPDATE events SET status = 'pending', result = ?, attempts = 0 WHERE id = ?").run(commandOutput, id);
+  db.prepare(
+    "UPDATE events SET status = 'pending', step = 'agent', command_output = ?, attempts = 0 WHERE id = ?",
+  ).run(commandOutput, id);
 }
 
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {

@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { Schedule, ScheduleSpec } from "./config.ts";
+import type { Schedule, ScheduledJob, ScheduleSpec } from "./config.ts";
 import { addEvent } from "./inbox.ts";
+import type { NewEvent } from "./inbox.ts";
 
 export type Timer = {
   id: number;
@@ -17,6 +18,10 @@ function findTimers(db: DatabaseSync, where: string, ...params: number[]): Timer
     .map(
       (row) => ({ ...row, spec: JSON.parse(row.spec as string), payload: JSON.parse(row.payload as string) }) as Timer,
     );
+}
+
+export function scheduledEvent(job: ScheduledJob): NewEvent {
+  return { type: "timer.fired", payload: job, step: "command" in job ? "command" : "agent" };
 }
 
 export function nextDue(spec: ScheduleSpec, now: number): number {
@@ -67,10 +72,10 @@ export function fire(db: DatabaseSync, timer: Timer, now: number): void {
   db.exec("BEGIN");
   try {
     if (timer.kind === "idle") {
-      addEvent(db, { type: "session.idle", payload: timer.payload }, now);
+      addEvent(db, { type: "session.idle", payload: timer.payload, step: "agent" }, now);
       db.prepare("UPDATE timers SET status = 'done' WHERE id = ?").run(timer.id);
     } else {
-      addEvent(db, { type: "timer.fired", payload: timer.payload }, now);
+      addEvent(db, scheduledEvent(timer.payload as ScheduledJob), now);
       db.prepare("UPDATE timers SET due_at = ? WHERE id = ?").run(nextDue(timer.spec, now), timer.id);
     }
     db.exec("COMMIT");
