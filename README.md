@@ -19,7 +19,7 @@ npm run chat -- --debug "hi"    # also show where the message went and the work 
 npm run status                  # list pending, running and recent messages, and recently closed sessions
 ```
 
-mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt or a session being written into memory is in progress. [Command schedules](#schedules) need no agent and run alongside.
+mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt or a session being written into memory is in progress. [Command schedules](#schedules) run alongside; their notifying results can use a separate voice call.
 
 mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic and role in brackets before the answer:
 
@@ -76,7 +76,7 @@ When the daemon starts, it copies each of these files that is missing from `temp
 
 Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
-`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
+`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. When an answer or scheduled result is rewritten, the log ends with a `mei_voice` line holding the `original` result and the `voiced` one you received; compare them to improve `CHARACTER.md`.
 
 ## Configuration
 
@@ -133,7 +133,7 @@ notify = false           # keep this job's results out of the listen stream; lef
 
 Pick the role whose `use` fits the job, so changing a role's model moves its schedules too. To give one schedule its own model, write `model = "provider/id"` in place of `role`.
 
-A command schedule runs without an agent, for jobs that need no model:
+A command schedule does its work without an agent:
 
 ```toml
 [[schedule]]
@@ -191,7 +191,9 @@ npm run -s listen | while read -r event; do
 done
 ```
 
-A schedule with `notify = false` is left out, which is how `dream` stays silent. Chat answers and session summaries are never sent.
+With `[character] enabled`, successful results from notifying schedules are rewritten in the voice of `CHARACTER.md`, using `[character] model`, before publication. The voice sees the schedule's name and prompt or command, plus the topics of open chat sessions (including a chat currently being answered), so it can phrase an interruption as an aside without mixing tasks. Failed or empty rewrites fall back to the original result; failed runs publish their error without rewriting.
+
+A schedule with `notify = false` is left out and skips the voice call, which is how `dream` stays silent. Chat answers and session summaries are never sent.
 
 Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
 

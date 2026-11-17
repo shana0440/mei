@@ -16,6 +16,7 @@ import { voice } from "./voice.ts";
 export type Deps = {
   db: DatabaseSync;
   config: Config;
+  activeChat: { topic?: string };
   run: typeof run;
   rearm: () => void;
   onLine: (eventId: number, line: string) => void;
@@ -31,6 +32,7 @@ const handlers: Record<string, Handler | undefined> = {
     const onLine = (line: string) => deps.onLine(event.id, line);
 
     const { sessionId, topic, role, folder, isNew, reason, context } = await route(deps, text);
+    deps.activeChat.topic = topic;
     const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, role: role.name, folder, isNew, reason });
     appendFileSync(logFile, `${routeLine}\n`);
     onLine(routeLine);
@@ -81,7 +83,8 @@ const handlers: Record<string, Handler | undefined> = {
     deps.db.prepare(
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     ).run(key, String(startedAt));
-    return { result, topic: schedule.name };
+    const voiced = schedule.notify ? await voice(deps, { schedule, answer: result, logFile }) : result;
+    return { result: voiced, topic: schedule.name };
   },
   "session.idle": async (event, deps) => {
     const { sessionId } = event.payload as { sessionId: string };
@@ -116,6 +119,7 @@ async function runPrompt(deps: Deps, { prompt, model, values, logFile }: PromptO
 async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   const { db } = deps;
   markRunning(db, event.id, Date.now());
+  if (event.type === "user.message") deps.activeChat.topic = (event.payload as { text: string }).text;
   try {
     const handler = handlers[event.type];
     if (!handler) throw new Error(`No handler for event type "${event.type}"`);
@@ -124,6 +128,8 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
     markDone(db, event.id, handled, Date.now());
   } catch (error) {
     markFailed(db, event.id, (error as Error).message, Date.now());
+  } finally {
+    if (event.type === "user.message") delete deps.activeChat.topic;
   }
   deps.onFinished(getEvent(db, event.id) ?? event);
 }

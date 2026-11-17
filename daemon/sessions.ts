@@ -49,6 +49,17 @@ export function sessionsActiveSince(db: DatabaseSync, since: number): Session[] 
     .all(since) as Session[];
 }
 
+export function openSessionTopics(db: DatabaseSync, now: number): string[] {
+  return db
+    .prepare(
+      `SELECT sessions.topic FROM sessions JOIN timers
+         ON timers.name = 'idle:' || sessions.id
+       WHERE timers.kind = 'idle' AND timers.status = 'active' AND timers.due_at > ?`,
+    )
+    .all(now)
+    .map((row) => row.topic as string);
+}
+
 export function saveSummary(db: DatabaseSync, id: string, summary: string, now: number): void {
   db.prepare("UPDATE sessions SET summary = ?, summarized_at = ? WHERE id = ?").run(summary, now, id);
 }

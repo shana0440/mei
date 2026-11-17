@@ -27,6 +27,7 @@ await runCommand(async () => {
   const deps: Deps = {
     db,
     config,
+    activeChat: {},
     run,
     rearm: () => rearm(),
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
