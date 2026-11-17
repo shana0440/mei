@@ -1,5 +1,4 @@
 import { spawn } from "node:child_process";
-import { once } from "node:events";
 import { appendFileSync } from "node:fs";
 import { home } from "./paths.ts";
 
@@ -27,7 +26,9 @@ export async function runScript({ command, timeoutMinutes, env, logFile }: Scrip
     timedOut = true;
     killGroup();
   }, timeoutMinutes * 60_000);
-  const [code, signal]: [number | null, NodeJS.Signals | null] = await once(child, "close");
+  const { code, signal } = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve) =>
+    child.on("close", (code, signal) => resolve({ code, signal })),
+  );
   clearTimeout(timeout);
   killGroup();
   appendFileSync(logFile, `${JSON.stringify({ type: "mei_command", command, code, signal, stdout, stderr })}\n`);
