@@ -12,6 +12,7 @@ export type Role = { name: string; model: string; use: string };
 export type Config = {
   roles: Role[];
   router: { model: string; defaultRole: string };
+  character: { enabled: boolean; model: string };
   idle: { afterMinutes: number; model: string };
   schedules: Schedule[];
 };
@@ -103,6 +104,10 @@ export function loadConfig(path: string): Config {
     return {
       roles: roleList,
       router: { model: text(router, "model"), defaultRole },
+      character: {
+        enabled: flag(section(data, "character"), "enabled"),
+        model: text(section(data, "character"), "model"),
+      },
       idle: {
         afterMinutes: positiveNumber(section(data, "idle"), "after_minutes"),
         model: text(section(data, "idle"), "model"),

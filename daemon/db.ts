@@ -35,6 +35,7 @@ const migrations = [
   "ALTER TABLE sessions ADD COLUMN context TEXT NOT NULL DEFAULT ''",
   "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
   "ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT ''",
+  "ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT ''",
 ];
 
 export function openDb(path: string): DatabaseSync {

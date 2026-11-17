@@ -16,6 +16,10 @@ use = "decisions, planning, careful analysis"
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
 default_role = "chat"    # role used when the router fails or picks no known role
 
+[character]
+enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
+model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
+
 [idle]
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory

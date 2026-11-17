@@ -72,11 +72,11 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | `.agents/skills/` | mei's skills |
 | `state/` | what the daemon stores, described below |
 
-When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit, and it is where mei works: every run starts there.
+When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit. Scheduled runs and memory writing start in the home; a chat session starts in the folder the router picked for it.
 
-Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is loaded on every daemon run, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
+Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
-`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`.
+`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
 
 ## Configuration
 
@@ -95,12 +95,22 @@ use = "writing or changing code, debugging"
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
 default_role = "chat"    # role used when the router fails or picks no known role
 
+[character]
+enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
+model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
+
 [idle]
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
 ```
 
-The router picks a role for each new session from the roles' `use`, and the session keeps that role until it closes; a session that continues a closed one gets a fresh pick. The instructions for the router's decision are in `prompts/route.md` in this checkout.
+Each message goes through up to three runs:
+
+1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder until it closes; a session that continues a closed one gets a fresh pick.
+2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
+3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks, seeing the last two exchanges of the session. It has no tools and keeps code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+
+Memory is written from the working agent's transcript, so it holds the original answers. The voice's instructions are in `prompts/voice.md`. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
 ## Schedules
 

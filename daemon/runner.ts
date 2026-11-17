@@ -1,10 +1,11 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { appendFileSync, mkdirSync } from "node:fs";
+import { dirname } from "node:path";
 import { home } from "./paths.ts";
 
 export type RunOptions = {
   prompt: string;
+  cwd?: string;
   sessionId?: string;
   sessionDir?: string;
   model?: string;
@@ -40,8 +41,6 @@ function sessionArgs({ sessionId, sessionDir }: RunOptions): string[] {
 }
 
 function runArgs(options: RunOptions): string[] {
-  const character = readFileSync(join(home, "CHARACTER.md"), "utf8");
-  const systemPrompt = [character, options.appendSystemPrompt].filter(Boolean).join("\n\n");
   return [
     "--mode",
     "json",
@@ -49,8 +48,7 @@ function runArgs(options: RunOptions): string[] {
     ...(options.model ? ["--model", options.model] : []),
     ...(options.tools === false ? ["--no-tools"] : []),
     ...(options.contextFiles === false ? ["--no-context-files"] : []),
-    "--append-system-prompt",
-    systemPrompt,
+    ...(options.appendSystemPrompt ? ["--append-system-prompt", options.appendSystemPrompt] : []),
     "--",
     options.prompt,
   ];
@@ -80,7 +78,7 @@ export async function run(options: RunOptions): Promise<RunResult> {
   if (logFile) mkdirSync(dirname(logFile), { recursive: true });
 
   const child = spawn("pi-bolt", runArgs(options), {
-    cwd: home,
+    cwd: options.cwd ?? home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exitFailure = new Promise<string | undefined>((resolve) => {

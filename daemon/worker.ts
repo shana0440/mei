@@ -10,6 +10,7 @@ import { route } from "./router.ts";
 import type { run } from "./runner.ts";
 import { recordActivity, saveSummary } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
+import { voice } from "./voice.ts";
 
 export type Deps = {
   db: DatabaseSync;
@@ -28,13 +29,14 @@ const handlers: Record<string, Handler | undefined> = {
     const logFile = join(logsDir, `${event.id}.jsonl`);
     const onLine = (line: string) => deps.onLine(event.id, line);
 
-    const { sessionId, topic, role, isNew, reason, context } = await route(deps, text);
-    const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, role: role.name, isNew, reason });
+    const { sessionId, topic, role, folder, isNew, reason, context } = await route(deps, text);
+    const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, role: role.name, folder, isNew, reason });
     appendFileSync(logFile, `${routeLine}\n`);
     onLine(routeLine);
 
     const { ok, response, error } = await deps.run({
       prompt: text,
+      cwd: folder,
       sessionId,
       sessionDir: chatSessionsDir,
       model: role.model,
@@ -43,11 +45,12 @@ const handlers: Record<string, Handler | undefined> = {
       onLine,
     });
     if (!ok) throw new Error(error);
+    const voiced = await voice(deps, { message: text, answer: response, sessionId, logFile });
     const now = Date.now();
-    recordActivity(deps.db, { id: sessionId, topic, role: role.name, context, eventId: event.id }, now);
+    recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
     deps.rearm();
-    return { result: response, sessionId, topic: `${topic} · ${role.name}` };
+    return { result: voiced, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
     const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
