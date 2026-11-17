@@ -52,9 +52,10 @@ await runCommand(async () => {
       return { result: event.result ?? "", topic: event.topic ?? "" };
     },
     job: ({ name }) => {
-      const timer = listTimers(db).find((candidate) => candidate.kind === "schedule" && candidate.name === name);
-      if (!timer) throw new Error(`No schedule is named "${name}"`);
-      const eventId = addEvent(db, { type: "timer.fired", payload: timer.payload }, Date.now());
+      const schedule = config.schedules.find((candidate) => candidate.name === name);
+      if (!schedule) throw new Error(`No schedule is named "${name}"`);
+      const { spec, enabled, ...payload } = schedule;
+      const eventId = addEvent(db, { type: "timer.fired", payload }, Date.now());
       wake();
       return { eventId };
     },
