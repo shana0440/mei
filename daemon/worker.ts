@@ -97,7 +97,7 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   try {
     const handler = handlers[event.type];
     if (!handler) throw new Error(`No handler for event type "${event.type}"`);
-    markDone(db, event.id, await handler(event, deps), Date.now());
+    markDone(db, event.id, await handler(event, { ...deps }), Date.now());
   } catch (error) {
     markFailed(db, event.id, (error as Error).message, Date.now());
   }
