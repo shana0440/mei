@@ -1,11 +1,11 @@
 import { EventEmitter, once } from "node:events";
-import { mkdirSync } from "node:fs";
+import { cpSync, mkdirSync } from "node:fs";
 import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
 import { openDb } from "./db.ts";
 import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
-import { configPath, dbPath, logsDir, socketPath } from "./paths.ts";
+import { configPath, dbPath, home, logsDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { closedSessions } from "./sessions.ts";
@@ -18,6 +18,7 @@ const maxAttempts = 3;
 const recentlyClosed = 7 * 24 * 60 * 60_000;
 
 await runCommand(async () => {
+  cpSync(templateDir, home, { recursive: true, force: false });
   const config = loadConfig(configPath);
   mkdirSync(logsDir, { recursive: true });
   const db = openDb(dbPath);

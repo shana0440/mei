@@ -2,7 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { parse, TomlDate } from "smol-toml";
 import type { TomlTable, TomlValue } from "smol-toml";
-import { root } from "./paths.ts";
+import { home } from "./paths.ts";
 
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
 export type Schedule = { name: string; prompt: string; model: string; notify: boolean; spec: ScheduleSpec };
@@ -53,7 +53,7 @@ function schedule(table: TomlTable, index: number): Schedule {
   const name = text({ label: `schedule ${index + 1}`, table }, "name");
   const from = { label: `schedule "${name}"`, table };
   const prompt = text(from, "prompt");
-  if (!existsSync(join(root, prompt))) throw new Error(`${from.label}: the prompt file ${prompt} does not exist`);
+  if (!existsSync(join(home, prompt))) throw new Error(`${from.label}: the prompt file ${prompt} does not exist`);
   if ("daily_at" in table === "every_minutes" in table) {
     throw new Error(`${from.label} needs exactly one of daily_at or every_minutes`);
   }
