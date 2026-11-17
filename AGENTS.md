@@ -17,7 +17,8 @@ Every document here, this file included, is for someone new to the repo. Keep on
 ## Verify
 
 - Don't write unit tests.
-- Check a change the way a user would: start the daemon with `MEI_HOME` set to a temporary directory and use `npm run chat`, `status` and `job`. An installed service is someone's real assistant: leave it and its home alone. When the check is done, stop the daemon you started and delete the temporary home and every other file the check created.
+- Check a change the way a user would: start the daemon with `MEI_HOME` set to a temporary directory and use `npm run chat`, `status` and `job`. An installed service is someone's real assistant: leave it and its home alone.
+- When the check is done, stop the daemon you started and delete the temporary home and every other file the check created.
 
 ## Workflow
 
