@@ -1,6 +1,6 @@
 import type { DatabaseSync } from "node:sqlite";
 
-export type Step = "command" | "agent";
+export type Step = "command" | "agent" | "voice";
 
 export type InboxEvent = {
   id: number;
@@ -8,7 +8,7 @@ export type InboxEvent = {
   payload: unknown;
   status: "pending" | "running" | "done" | "failed";
   step: Step;
-  commandOutput: string | null;
+  handoff: string | null;
   attempts: number;
   sessionId: string | null;
   topic: string | null;
@@ -21,9 +21,10 @@ export type InboxEvent = {
 
 export type NewEvent = { type: string; payload: unknown; step: Step };
 export type Outcome = { result: string; sessionId?: string; topic?: string };
+export type Handoff = { to: Exclude<Step, "command">; output: string; sessionId?: string; topic?: string };
 
 const selectEvents = `
-  SELECT id, type, payload, status, step, command_output AS commandOutput, attempts,
+  SELECT id, type, payload, status, step, handoff, attempts,
     session_id AS sessionId, topic, result, error,
     created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt
   FROM events`;
@@ -48,16 +49,17 @@ export function pendingCommands(db: DatabaseSync): InboxEvent[] {
   return findEvents(db, "WHERE status = 'pending' AND step = 'command' ORDER BY id");
 }
 
-export function nextForAgent(db: DatabaseSync): InboxEvent | undefined {
+export function nextAt(db: DatabaseSync, step: Step): InboxEvent | undefined {
   return findEvents(
     db,
-    "WHERE status = 'pending' AND step = 'agent' ORDER BY type = 'user.message' DESC, id LIMIT 1",
+    "WHERE status = 'pending' AND step = ? ORDER BY type = 'user.message' DESC, id LIMIT 1",
+    step,
   )[0];
 }
 
 export function markRunning(db: DatabaseSync, id: number, now: number): void {
   db.prepare(
-    "UPDATE events SET status = 'running', attempts = attempts + 1, started_at = ? WHERE id = ?",
+    "UPDATE events SET status = 'running', attempts = attempts + 1, started_at = COALESCE(started_at, ?) WHERE id = ?",
   ).run(now, id);
 }
 
@@ -67,10 +69,12 @@ export function markDone(db: DatabaseSync, id: number, { result, sessionId, topi
   ).run(result, sessionId ?? null, topic ?? null, now, id);
 }
 
-export function queueForAgent(db: DatabaseSync, id: number, commandOutput: string): void {
+export function handOff(db: DatabaseSync, id: number, { to, output, sessionId, topic }: Handoff): void {
   db.prepare(
-    "UPDATE events SET status = 'pending', step = 'agent', command_output = ?, attempts = 0 WHERE id = ?",
-  ).run(commandOutput, id);
+    `UPDATE events SET status = 'pending', step = ?, handoff = ?, attempts = 0,
+       session_id = COALESCE(?, session_id), topic = COALESCE(?, topic)
+     WHERE id = ?`,
+  ).run(to, output, sessionId ?? null, topic ?? null, id);
 }
 
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {
