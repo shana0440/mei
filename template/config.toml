@@ -33,5 +33,5 @@ model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into
 name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
-model = "anthropic/claude-haiku-5-5"   # model for this job; empty or left out uses Pi's default
+role = "chat"            # the prompt runs with this role's model; left out means router.default_role
 notify = false           # keep this job's results out of the listen stream; left out means true

@@ -24,6 +24,7 @@ export type Config = {
 };
 
 type Section = { label: string; table: TomlTable };
+type Roles = { roles: Role[]; defaultRole: string };
 
 function isTable(value: TomlValue | undefined): value is TomlTable {
   return typeof value === "object" && !Array.isArray(value) && !(value instanceof TomlDate);
@@ -70,27 +71,34 @@ function commandPart(from: Section): Command | undefined {
   };
 }
 
-function promptPart(from: Section): Prompt | undefined {
+function promptPart(from: Section, { roles, defaultRole }: Roles): Prompt | undefined {
   const { label, table } = from;
   if (!("prompt" in table)) {
-    if ("model" in table) throw new Error(`${label}: model applies only to a prompt`);
+    for (const key of ["role", "model"]) {
+      if (key in table) throw new Error(`${label}: ${key} applies only to a prompt`);
+    }
     return undefined;
   }
   const prompt = text(from, "prompt");
   if (!existsSync(join(home, prompt))) throw new Error(`${label}: the prompt file ${prompt} does not exist`);
-  return { prompt, model: "model" in table ? text(from, "model") : "" };
+  if ("role" in table && "model" in table) throw new Error(`${label} needs at most one of role or model`);
+  if ("model" in table) return { prompt, model: text(from, "model") };
+  const roleName = "role" in table ? text(from, "role") : defaultRole;
+  const role = roles.find(({ name }) => name === roleName);
+  if (!role) throw new Error(`${label}: role "${roleName}" is not defined under [roles]`);
+  return { prompt, model: role.model };
 }
 
-function job(from: Section): Job {
+function job(from: Section, roles: Roles): Job {
   const command = commandPart(from);
-  const prompt = promptPart(from);
+  const prompt = promptPart(from, roles);
   if (command && prompt) return { ...command, ...prompt };
   const only = command ?? prompt;
   if (!only) throw new Error(`${from.label} needs a prompt, a command or both`);
   return only;
 }
 
-function schedule(table: TomlTable, index: number): Schedule {
+function schedule(table: TomlTable, index: number, roles: Roles): Schedule {
   const name = text({ label: `schedule ${index + 1}`, table }, "name");
   const from = { label: `schedule "${name}"`, table };
   if ("daily_at" in table === "every_minutes" in table) {
@@ -98,7 +106,7 @@ function schedule(table: TomlTable, index: number): Schedule {
   }
   return {
     name,
-    ...job(from),
+    ...job(from, roles),
     notify: "notify" in table ? flag(from, "notify") : true,
     spec:
       "daily_at" in table
@@ -118,10 +126,10 @@ function roles(data: TomlTable): Role[] {
   return list;
 }
 
-function schedules(data: TomlTable): Schedule[] {
+function schedules(data: TomlTable, roles: Roles): Schedule[] {
   const tables = data.schedule ?? [];
   if (!Array.isArray(tables) || !tables.every(isTable)) throw new Error("schedule must be written as [[schedule]]");
-  const list = tables.map(schedule);
+  const list = tables.map((table, index) => schedule(table, index, roles));
   const repeated = list.find(({ name }, index) => list.findIndex((other) => other.name === name) < index);
   if (repeated) throw new Error(`Two schedules are named "${repeated.name}"`);
   return list;
@@ -147,7 +155,7 @@ export function loadConfig(path: string): Config {
         afterMinutes: positiveNumber(section(data, "idle"), "after_minutes"),
         model: text(section(data, "idle"), "model"),
       },
-      schedules: schedules(data),
+      schedules: schedules(data, { roles: roleList, defaultRole }),
     };
   } catch (error) {
     throw new Error(`${path}: ${(error as Error).message}`);

@@ -21,12 +21,13 @@ mei's home is three levels up from this file's directory. Paths below are relati
    name = "<unique name>"
    command = "scripts/<name>.sh"   # a command, a prompt or both
    prompt = "prompts/<name>.md"
+   role = "<role>"                 # with a prompt: the role whose model runs it
    daily_at = "08:00"              # local time HH:MM; or: every_minutes = 60
    ```
 
-   Optional keys: `notify = false` keeps the results from the user; `model = "provider/id"` for a prompt; `timeout_minutes` for a command, 10 when left out.
+   For a prompt, pick the role under `[roles]` in `config.toml` whose `use` fits the job, and set `model = "provider/id"` in place of `role` only when the user asks for a model. Optional keys: `notify = false` keeps the results from the user; `timeout_minutes` for a command, 10 when left out.
 4. Run `mei reload`. When it reports an error, fix `config.toml` and reload again.
 5. Run `mei job <name>`. A command runs right away: check its result with `mei status`. A prompt, including the prompt half of a schedule with both, runs after your answer, since agent runs go one at a time.
-6. Show the user the block and the result of the test run, or of your own run of the script and prompt.
+6. Show the user the block, the role you picked and why, and the result of the test run, or of your own run of the script and prompt.
 
 To remove a schedule, delete its block, reload, and delete its script or prompt.

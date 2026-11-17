@@ -127,9 +127,11 @@ mei runs a prompt or a command on a schedule when `config.toml` has a block for 
 name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
-model = ""               # model for this job; empty uses Pi's default
+role = "chat"            # the prompt runs with this role's model; left out means router.default_role
 notify = false           # keep this job's results out of the listen stream; left out means true
 ```
+
+Pick the role whose `use` fits the job, so changing a role's model moves its schedules too. To give one schedule its own model, write `model = "provider/id"` in place of `role`.
 
 A command schedule runs without an agent, for jobs that need no model:
 
