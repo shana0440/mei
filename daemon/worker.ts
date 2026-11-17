@@ -2,8 +2,19 @@ import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config, ScheduledJob } from "./config.ts";
-import { getEvent, handOff, markDone, markFailed, markRunning, nextAt, pendingCommands } from "./inbox.ts";
-import type { Handoff, InboxEvent, Outcome } from "./inbox.ts";
+import {
+  getEvent,
+  handOff,
+  lastRun,
+  markDone,
+  markFailed,
+  markRunning,
+  nextAt,
+  nextCommand,
+  schedulesWaitingForCommand,
+  stepAfter,
+} from "./inbox.ts";
+import type { InboxEvent, Step, StepOutput } from "./inbox.ts";
 import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
@@ -22,42 +33,84 @@ export type Deps = {
   onFinished: (event: InboxEvent) => void;
 };
 
-type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome | Handoff>;
-type CommandSchedule = Extract<ScheduledJob, { command: string }>;
+type Work = (event: InboxEvent, deps: Deps) => Promise<StepOutput>;
+type CommandJob = Extract<ScheduledJob, { command: string }>;
+type PromptJob = Extract<ScheduledJob, { prompt: string }>;
 
-function logFileOf(event: InboxEvent): string {
-  return join(logsDir, `${event.id}.jsonl`);
+export function startWorker(deps: Deps): () => void {
+  const { db } = deps;
+  const perform = (event: InboxEvent) => performStep(deps, event, wake);
+  const wake: Record<Step, () => void> = {
+    command: oneAtATimePer(() => schedulesWaitingForCommand(db), (name) => nextCommand(db, name), perform),
+    agent: oneAtATime(() => nextAt(db, "agent"), perform),
+    voice: oneAtATime(() => nextAt(db, "voice"), perform),
+  };
+  return () => Object.values(wake).forEach((nudge) => nudge());
 }
 
-function watermarkKey({ name }: ScheduledJob): string {
-  return `watermark:${name}`;
+function oneAtATime(next: () => InboxEvent | undefined, perform: (event: InboxEvent) => Promise<void>): () => void {
+  let nudge = () => {};
+  void (async () => {
+    for (;;) {
+      await new Promise<void>((resolve) => (nudge = resolve));
+      for (let event = next(); event; event = next()) await perform(event);
+    }
+  })();
+  return () => nudge();
 }
 
-function lastRun(db: DatabaseSync, schedule: ScheduledJob): string {
-  const watermark = Number(db.prepare("SELECT value FROM kv WHERE key = ?").get(watermarkKey(schedule))?.value ?? 0);
-  return watermark ? new Date(watermark).toISOString() : "never";
+function oneAtATimePer(
+  keys: () => string[],
+  next: (key: string) => InboxEvent | undefined,
+  perform: (event: InboxEvent) => Promise<void>,
+): () => void {
+  const queues = new Map<string, () => void>();
+  return () => {
+    for (const key of keys()) {
+      if (!queues.has(key)) queues.set(key, oneAtATime(() => next(key), perform));
+      queues.get(key)?.();
+    }
+  };
 }
 
-function finishSchedule(db: DatabaseSync, event: InboxEvent, result: string): Outcome {
-  const schedule = event.payload as ScheduledJob;
-  db.prepare(
-    "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
-  ).run(watermarkKey(schedule), String(event.createdAt));
-  return { result, topic: schedule.name };
+async function performStep(deps: Deps, event: InboxEvent, wake: Record<Step, () => void>): Promise<void> {
+  const { db } = deps;
+  markRunning(db, event.id, Date.now());
+  try {
+    const done = await work[event.step](event, deps);
+    const next = stepAfter(event);
+    if (next) {
+      handOff(db, event.id, next, done);
+      return wake[next]();
+    }
+    markDone(db, event.id, done, Date.now());
+  } catch (error) {
+    markFailed(db, event.id, (error as Error).message, Date.now());
+  }
+  deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
-function afterSchedule(db: DatabaseSync, event: InboxEvent, output: string): Outcome | Handoff {
-  const schedule = event.payload as ScheduledJob;
-  return schedule.notify ? { to: "voice", output } : finishSchedule(db, event, output);
-}
-
-const commandStep: Handler = async (event, deps) => {
-  const schedule = event.payload as CommandSchedule;
-  const output = await runScript({ ...schedule, env: { MEI_LAST_RUN: lastRun(deps.db, schedule) }, logFile: logFileOf(event) });
-  return "prompt" in schedule ? { to: "agent", output } : afterSchedule(deps.db, event, output);
+const work: Record<Step, Work> = {
+  command: async (event, deps) => {
+    const job = event.payload as CommandJob;
+    const output = await runScript({ ...job, env: { MEI_LAST_RUN: lastRunText(deps.db, job) }, logFile: logFileOf(event) });
+    return { output, topic: job.name };
+  },
+  agent: (event, deps) => {
+    const agentWork = agentWorkByType[event.type];
+    if (!agentWork) throw new Error(`No handler for event type "${event.type}"`);
+    return agentWork(event, deps);
+  },
+  voice: async (event, deps) => {
+    const about =
+      event.type === "user.message"
+        ? { message: (event.payload as { text: string }).text }
+        : { schedule: (event.payload as ScheduledJob).name };
+    return { output: await voice(deps, { ...about, answer: event.handoff ?? "", logFile: logFileOf(event) }) };
+  },
 };
 
-const agentSteps: Record<string, Handler | undefined> = {
+const agentWorkByType: Record<string, Work | undefined> = {
   "user.message": async (event, deps) => {
     const { text } = event.payload as { text: string };
     const logFile = logFileOf(event);
@@ -83,23 +136,23 @@ const agentSteps: Record<string, Handler | undefined> = {
     recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
     deps.rearm();
-    return { to: "voice", output: response, sessionId, topic: `${topic} · ${role.name}` };
+    return { output: response, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
-    const schedule = event.payload as ScheduledJob;
-    if (!("prompt" in schedule)) throw new Error(`Schedule "${schedule.name}" has no prompt`);
+    const job = event.payload as PromptJob;
     const output = event.handoff;
-    const result = await runPrompt(deps, {
-      ...schedule,
-      values: {
+    const { ok, response, error } = await deps.run({
+      prompt: fillPrompt(readFileSync(join(home, job.prompt), "utf8"), {
         now: new Date().toLocaleString(),
-        last_run: lastRun(deps.db, schedule),
+        last_run: lastRunText(deps.db, job),
         sessions_dir: chatSessionsDir,
         ...(output === null ? {} : { output }),
-      },
+      }),
+      model: job.model,
       logFile: logFileOf(event),
     });
-    return afterSchedule(deps.db, event, result);
+    if (!ok) throw new Error(error);
+    return { output: response, topic: job.name };
   },
   "session.idle": async (event, deps) => {
     const { sessionId } = event.payload as { sessionId: string };
@@ -115,89 +168,15 @@ const agentSteps: Record<string, Handler | undefined> = {
     });
     if (!ok) throw new Error(error);
     saveSummary(deps.db, sessionId, response, Date.now());
-    return { result: response, sessionId };
+    return { output: response, sessionId };
   },
 };
 
-type PromptOptions = { prompt: string; model: string; values: Record<string, string>; logFile: string };
-
-async function runPrompt(deps: Deps, { prompt, model, values, logFile }: PromptOptions): Promise<string> {
-  const { ok, response, error } = await deps.run({
-    prompt: fillPrompt(readFileSync(join(home, prompt), "utf8"), values),
-    model,
-    logFile,
-  });
-  if (!ok) throw new Error(error);
-  return response;
+function logFileOf(event: InboxEvent): string {
+  return join(logsDir, `${event.id}.jsonl`);
 }
 
-const voiceStep: Handler = async (event, deps) => {
-  const answer = event.handoff ?? "";
-  const logFile = logFileOf(event);
-  if (event.type === "user.message") {
-    const { text } = event.payload as { text: string };
-    const result = await voice(deps, { message: text, answer, logFile });
-    return { result, sessionId: event.sessionId ?? undefined, topic: event.topic ?? undefined };
-  }
-  const schedule = event.payload as ScheduledJob;
-  return finishSchedule(deps.db, event, await voice(deps, { schedule: schedule.name, answer, logFile }));
-};
-
-const agentStep: Handler = (event, deps) => {
-  const step = agentSteps[event.type];
-  if (!step) throw new Error(`No handler for event type "${event.type}"`);
-  return step(event, deps);
-};
-
-async function handle(deps: Deps, event: InboxEvent, step: Handler, nudge: (handoff: Handoff) => void): Promise<void> {
-  const { db } = deps;
-  markRunning(db, event.id, Date.now());
-  try {
-    const handled = await step(event, deps);
-    if ("to" in handled) {
-      handOff(db, event.id, handled);
-      return nudge(handled);
-    }
-    markDone(db, event.id, handled, Date.now());
-  } catch (error) {
-    markFailed(db, event.id, (error as Error).message, Date.now());
-  }
-  deps.onFinished(getEvent(db, event.id) ?? event);
-}
-
-function startQueue(next: () => InboxEvent | undefined, run: (event: InboxEvent) => Promise<void>): () => void {
-  let nudge = () => {};
-  void (async () => {
-    for (;;) {
-      const event = next();
-      if (event) await run(event);
-      else await new Promise<void>((resolve) => (nudge = resolve));
-    }
-  })();
-  return () => nudge();
-}
-
-export function startWorker(deps: Deps): () => void {
-  const queues = { agent: () => {}, voice: () => {} };
-  const nudge = ({ to }: Handoff) => queues[to]();
-  queues.agent = startQueue(() => nextAt(deps.db, "agent"), (event) => handle(deps, event, agentStep, nudge));
-  queues.voice = startQueue(() => nextAt(deps.db, "voice"), (event) => handle(deps, event, voiceStep, nudge));
-
-  const runningSchedules = new Set<string>();
-  function startCommands(): void {
-    for (const event of pendingCommands(deps.db)) {
-      const { name } = event.payload as CommandSchedule;
-      if (runningSchedules.has(name)) continue;
-      runningSchedules.add(name);
-      void handle(deps, event, commandStep, nudge).finally(() => {
-        runningSchedules.delete(name);
-        startCommands();
-      });
-    }
-  }
-  return () => {
-    startCommands();
-    queues.agent();
-    queues.voice();
-  };
+function lastRunText(db: DatabaseSync, job: ScheduledJob): string {
+  const at = lastRun(db, job.name);
+  return at === undefined ? "never" : new Date(at).toISOString();
 }

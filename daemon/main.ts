@@ -3,7 +3,6 @@ import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
-import type { ScheduledJob } from "./config.ts";
 import { openDb } from "./db.ts";
 import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
@@ -12,7 +11,7 @@ import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { closedSessions } from "./sessions.ts";
 import { startServer } from "./server.ts";
-import { listTimers, scheduledEvent, syncSchedules } from "./timers.ts";
+import { listTimers, syncSchedules } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
@@ -44,7 +43,7 @@ await runCommand(async () => {
 
   await startServer(socketPath, {
     chat: async ({ text, debug }, send) => {
-      const id = addEvent(db, { type: "user.message", payload: { text }, step: "agent" }, Date.now());
+      const id = addEvent(db, { type: "user.message", payload: { text } }, Date.now());
       if (debug) progress.on(`line:${id}`, (line: string) => send(JSON.parse(line)));
       wake();
       const [event]: InboxEvent[] = await once(progress, `finished:${id}`);
@@ -55,7 +54,7 @@ await runCommand(async () => {
     job: ({ name }) => {
       const timer = listTimers(db).find((candidate) => candidate.kind === "schedule" && candidate.name === name);
       if (!timer) throw new Error(`No schedule is named "${name}"`);
-      const eventId = addEvent(db, scheduledEvent(timer.payload as ScheduledJob), Date.now());
+      const eventId = addEvent(db, { type: "timer.fired", payload: timer.payload }, Date.now());
       wake();
       return { eventId };
     },

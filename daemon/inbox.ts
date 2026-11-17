@@ -1,4 +1,5 @@
 import type { DatabaseSync } from "node:sqlite";
+import type { ScheduledJob } from "./config.ts";
 
 export type Step = "command" | "agent" | "voice";
 
@@ -19,9 +20,24 @@ export type InboxEvent = {
   finishedAt: number | null;
 };
 
-export type NewEvent = { type: string; payload: unknown; step: Step };
-export type Outcome = { result: string; sessionId?: string; topic?: string };
-export type Handoff = { to: Exclude<Step, "command">; output: string; sessionId?: string; topic?: string };
+type NewEvent = Pick<InboxEvent, "type" | "payload">;
+export type StepOutput = { output: string; sessionId?: string; topic?: string };
+
+export function stepsOf({ type, payload }: NewEvent): Step[] {
+  if (type === "user.message") return ["agent", "voice"];
+  if (type === "session.idle") return ["agent"];
+  const job = payload as ScheduledJob;
+  return [
+    ...("command" in job ? (["command"] as const) : []),
+    ...("prompt" in job ? (["agent"] as const) : []),
+    ...(job.notify ? (["voice"] as const) : []),
+  ];
+}
+
+export function stepAfter(event: InboxEvent): Step | undefined {
+  const steps = stepsOf(event);
+  return steps[steps.indexOf(event.step) + 1];
+}
 
 const selectEvents = `
   SELECT id, type, payload, status, step, handoff, attempts,
@@ -36,17 +52,13 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
     .map((row) => ({ ...row, payload: JSON.parse(row.payload as string) }) as InboxEvent);
 }
 
-export function addEvent(db: DatabaseSync, { type, payload, step }: NewEvent, now: number): number {
+export function addEvent(db: DatabaseSync, event: NewEvent, now: number): number {
   const { lastInsertRowid } = db
     .prepare(`INSERT INTO events (id, type, payload, status, step, created_at)
       SELECT COALESCE(MAX(id), (SELECT CAST(value AS INTEGER) FROM kv WHERE key = 'eventId'), 0) + 1,
         ?, ?, 'pending', ?, ? FROM events`)
-    .run(type, JSON.stringify(payload), step, now);
+    .run(event.type, JSON.stringify(event.payload), stepsOf(event)[0], now);
   return Number(lastInsertRowid);
-}
-
-export function pendingCommands(db: DatabaseSync): InboxEvent[] {
-  return findEvents(db, "WHERE status = 'pending' AND step = 'command' ORDER BY id");
 }
 
 export function nextAt(db: DatabaseSync, step: Step): InboxEvent | undefined {
@@ -57,24 +69,56 @@ export function nextAt(db: DatabaseSync, step: Step): InboxEvent | undefined {
   )[0];
 }
 
+const scheduleName = "json_extract(payload, '$.name')";
+
+export function schedulesWaitingForCommand(db: DatabaseSync): string[] {
+  return db
+    .prepare(`SELECT DISTINCT ${scheduleName} AS name FROM events WHERE status = 'pending' AND step = 'command'`)
+    .all()
+    .map(({ name }) => String(name));
+}
+
+export function nextCommand(db: DatabaseSync, schedule: string): InboxEvent | undefined {
+  return findEvents(
+    db,
+    `WHERE status = 'pending' AND step = 'command' AND ${scheduleName} = ? ORDER BY id LIMIT 1`,
+    schedule,
+  )[0];
+}
+
+export function lastRun(db: DatabaseSync, schedule: string): number | undefined {
+  const row = db
+    .prepare(`SELECT MAX(created_at) AS at FROM events WHERE type = 'timer.fired' AND status = 'done' AND ${scheduleName} = ?`)
+    .get(schedule);
+  return row?.at === null || row?.at === undefined ? undefined : Number(row.at);
+}
+
 export function markRunning(db: DatabaseSync, id: number, now: number): void {
   db.prepare(
     "UPDATE events SET status = 'running', attempts = attempts + 1, started_at = COALESCE(started_at, ?) WHERE id = ?",
   ).run(now, id);
 }
 
-export function markDone(db: DatabaseSync, id: number, { result, sessionId, topic }: Outcome, now: number): void {
-  db.prepare(
-    "UPDATE events SET status = 'done', result = ?, session_id = ?, topic = ?, finished_at = ? WHERE id = ?",
-  ).run(result, sessionId ?? null, topic ?? null, now, id);
+function keepSession(db: DatabaseSync, id: number, { sessionId, topic }: StepOutput): void {
+  db.prepare("UPDATE events SET session_id = COALESCE(?, session_id), topic = COALESCE(?, topic) WHERE id = ?").run(
+    sessionId ?? null,
+    topic ?? null,
+    id,
+  );
 }
 
-export function handOff(db: DatabaseSync, id: number, { to, output, sessionId, topic }: Handoff): void {
-  db.prepare(
-    `UPDATE events SET status = 'pending', step = ?, handoff = ?, attempts = 0,
-       session_id = COALESCE(?, session_id), topic = COALESCE(?, topic)
-     WHERE id = ?`,
-  ).run(to, output, sessionId ?? null, topic ?? null, id);
+export function markDone(db: DatabaseSync, id: number, done: StepOutput, now: number): void {
+  keepSession(db, id, done);
+  db.prepare("UPDATE events SET status = 'done', result = ?, finished_at = ? WHERE id = ?").run(done.output, now, id);
+}
+
+export function handOff(db: DatabaseSync, id: number, step: Step, done: StepOutput): void {
+  keepSession(db, id, done);
+  db.prepare("UPDATE events SET status = 'pending', step = ?, handoff = ?, attempts = 0 WHERE id = ?").run(
+    step,
+    done.output,
+    id,
+  );
 }
 
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {

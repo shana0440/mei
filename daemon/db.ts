@@ -41,7 +41,8 @@ const migrations = [
    UPDATE events SET handoff = result, result = NULL WHERE status IN ('pending', 'running');
    UPDATE events SET step = 'command'
    WHERE status IN ('pending', 'running') AND handoff IS NULL
-     AND type = 'timer.fired' AND json_extract(payload, '$.command') IS NOT NULL`,
+     AND type = 'timer.fired' AND json_extract(payload, '$.command') IS NOT NULL;
+   DELETE FROM kv WHERE key LIKE 'watermark:%'`,
 ];
 
 export function openDb(path: string): DatabaseSync {
