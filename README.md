@@ -83,6 +83,7 @@ name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
 model = ""               # model for this job; empty uses Pi's default
+notify = false           # keep this job's results out of the listen stream; left out means true
 ```
 
 Every run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
@@ -106,6 +107,22 @@ At 03:00 local time, `dream` consolidates chat transcripts into notes and task f
 
 A failed run leaves `{{last_run}}` unchanged, so the next run covers the same transcripts again.
 
+## Receiving results
+
+A program receives the result of each scheduled run as it finishes by subscribing to the daemon. `npm run listen` is such a subscriber: it prints every result as one JSON line, with the answer in `result`, or the reason in `error` when the run failed.
+
+```sh
+npm run -s listen | while read -r event; do
+  notify-send "mei" "$(jq -r '.result // .error' <<<"$event")"
+done
+```
+
+A schedule with `notify = false` is left out, which is how `dream` stays silent. Chat answers and session summaries are never sent.
+
+Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
+
+To subscribe from your own program, connect to the Unix socket `state/mei.sock` and send one line, `{"type":"listen"}` or `{"type":"listen","after":12}`. The daemon sends one JSON line per result until you close the connection.
+
 ## Running
 
 The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing works while it is stopped.
@@ -116,6 +133,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run chat -- "<prompt>"` | send a message and print the answer |
 | `npm run status` | list schedules, closed sessions and recent messages |
 | `npm run job -- <schedule name>` | run a schedule now |
+| `npm run listen` | print the result of each scheduled run as it finishes |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 

@@ -5,7 +5,7 @@ import type { TomlTable, TomlValue } from "smol-toml";
 import { root } from "./paths.ts";
 
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
-export type Schedule = { name: string; prompt: string; model: string; spec: ScheduleSpec };
+export type Schedule = { name: string; prompt: string; model: string; notify: boolean; spec: ScheduleSpec };
 
 export type Config = {
   chat: { model: string };
@@ -28,6 +28,12 @@ function section(data: TomlTable, label: string): Section {
 function text({ label, table }: Section, key: string): string {
   const value = table[key];
   if (typeof value !== "string") throw new Error(`${label}.${key} must be a string`);
+  return value;
+}
+
+function flag({ label, table }: Section, key: string): boolean {
+  const value = table[key];
+  if (typeof value !== "boolean") throw new Error(`${label}.${key} must be true or false`);
   return value;
 }
 
@@ -55,6 +61,7 @@ function schedule(table: TomlTable, index: number): Schedule {
     name,
     prompt,
     model: "model" in table ? text(from, "model") : "",
+    notify: "notify" in table ? flag(from, "notify") : true,
     spec:
       "daily_at" in table
         ? { daily_at: timeOfDay(from, "daily_at") }
