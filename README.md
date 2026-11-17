@@ -175,6 +175,12 @@ npm run job -- dream            # run a schedule now
 npm run status                  # also lists each schedule with its next run
 ```
 
+### Managing schedules
+
+```sh
+npm run schedule -- list                # every schedule: enabled or disabled, when it runs, its next run
+```
+
 ### Dream
 
 At 03:00 local time, `dream` consolidates chat transcripts into notes and task files, and updates `memory/MEMORY.md`. Its instructions are in `prompts/dream.md`.
@@ -212,6 +218,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
+| `npm run schedule -- list` | [list schedules](#managing-schedules) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
@@ -226,7 +233,7 @@ journalctl --user -u mei        # what the daemon printed
 
 `make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
 
-The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>` and `mei listen [--after <event number>]` are also available. Run `mei --help` for usage.
+The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>`, `mei listen [--after <event number>]` and `mei schedule ...` are also available. Run `mei --help` for usage.
 
 `make uninstall` stops the service and removes both files.
 

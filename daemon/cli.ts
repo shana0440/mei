@@ -7,6 +7,7 @@ const usage = `Usage:
   mei reset --yes
   mei job <schedule name>
   mei listen [--after <event number>]
+  mei schedule list|add|remove|enable|disable ...
 
 Connects to the running mei daemon.`;
 
@@ -16,7 +17,7 @@ await runCommand(async () => {
     console.log(usage);
     return;
   }
-  if (!["chat", "status", "reload", "reset", "job", "listen"].includes(command)) {
+  if (!["chat", "status", "reload", "reset", "job", "listen", "schedule"].includes(command)) {
     throw new Error(`Unknown command "${command}"\n\n${usage}`);
   }
   if (command === "status" && process.argv.length > 3) throw new Error("Usage: mei status");

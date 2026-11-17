@@ -91,6 +91,15 @@ await runCommand(async () => {
       rearm();
       return {};
     },
+    schedules: () => {
+      const timers = listTimers(db);
+      return {
+        schedules: config.schedules.map((schedule) => ({
+          ...schedule,
+          dueAt: timers.find((timer) => timer.kind === "schedule" && timer.name === schedule.name)?.dueAt ?? null,
+        })),
+      };
+    },
     reset: () => {
       if (db.prepare("SELECT 1 FROM events WHERE status = 'running'").get()) {
         throw new Error("mei is working. Wait for it to finish, then try resetting again.");
