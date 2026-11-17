@@ -1,8 +1,24 @@
-[chat]
-model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; empty uses Pi's default
+# The router picks one role for each new session, by its use. The session keeps
+# that role until it closes. model is provider/id; empty uses Pi's default.
+[roles.chat]
+model = "anthropic/claude-haiku-5-5"
+use = "casual conversation, quick questions, language practice"
+
+[roles.coder]
+model = "anthropic/claude-opus-5-5"
+use = "writing or changing code, debugging"
+
+[roles.advisor]
+model = "anthropic/claude-fable-5-2"
+use = "decisions, planning, careful analysis"
 
 [router]
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
+default_role = "chat"    # role used when the router fails or picks no known role
+
+[character]
+enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
+model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
 [idle]
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session

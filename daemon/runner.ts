@@ -5,6 +5,7 @@ import { home } from "./paths.ts";
 
 export type RunOptions = {
   prompt: string;
+  cwd?: string;
   sessionId?: string;
   sessionDir?: string;
   model?: string;
@@ -77,7 +78,7 @@ export async function run(options: RunOptions): Promise<RunResult> {
   if (logFile) mkdirSync(dirname(logFile), { recursive: true });
 
   const child = spawn("pi-bolt", runArgs(options), {
-    cwd: home,
+    cwd: options.cwd ?? home,
     stdio: ["ignore", "pipe", "pipe"],
   });
   const exitFailure = new Promise<string | undefined>((resolve) => {

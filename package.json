@@ -5,6 +5,7 @@
   "scripts": {
     "daemon": "node daemon/main.ts",
     "status": "node daemon/status.ts",
+    "reset": "node daemon/reset.ts",
     "chat": "node daemon/chat.ts",
     "job": "node daemon/job.ts",
     "listen": "node daemon/listen.ts"

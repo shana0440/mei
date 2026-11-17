@@ -21,17 +21,17 @@ npm run status                  # list pending, running and recent messages, and
 
 mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
 
-mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic in brackets before the answer:
+mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic and role in brackets before the answer:
 
 ```
 $ npm run -s chat -- "Remember the word walrus for a word game. Reply ok."
-[Remember word walrus]
+[Remember word walrus · chat]
 ok
 $ npm run -s chat -- "What is 17 times 3? Just the number."
-[Multiply 17 by 3]
+[Multiply 17 by 3 · chat]
 51
 $ npm run -s chat -- "Back to the word game: spell the word backwards."
-[Remember word walrus]
+[Remember word walrus · chat]
 s-u-r-l-a-w
 ```
 
@@ -41,11 +41,11 @@ A subject outlives its sessions through memory. When a session closes, mei saves
 
 ```
 $ npm run -s chat -- "Plan a three-day trip to Kyoto. One theme per day."
-[Kyoto trip plan]
+[Kyoto trip plan · chat]
 Day 1: temples ...
 $ # more than 30 minutes later
 $ npm run -s chat -- "For the Kyoto trip, swap day one and day three."
-[Kyoto trip plan]
+[Kyoto trip plan · chat]
 Day 1 is now ...
 ```
 
@@ -53,13 +53,18 @@ The instructions for writing a session into memory are in `prompts/summarize.md`
 
 The topic and the debug output go to stderr, so `npm run -s chat -- "hi" 2>/dev/null` prints the answer alone. Ctrl-C stops waiting; the message is still answered, and `npm run status` shows the result.
 
+## Reset memory
+
+With the daemon running, use `npm run reset -- --yes` to permanently clear memory, chat transcripts, session summaries, logs and the inbox. There is no undo. Settings, instructions, projects, skills and prompts are kept; schedules start fresh. If mei is working, wait for it to finish before resetting.
+
 ## Home
 
 Everything that belongs to your mei is in one directory, `~/.local/share/mei`. Set `MEI_HOME` to keep it somewhere else.
 
 | Path | What it is |
 |---|---|
-| `AGENTS.md` | mei's instructions |
+| `AGENTS.md` | operating instructions |
+| `CHARACTER.md` | assistant name, language, tone and speaking style |
 | `PROJECTS.md` | the locations on your machine and what each is for |
 | `config.toml` | settings |
 | `prompts/` | `summarize.md`, `dream.md` and the prompts of your own schedules |
@@ -67,27 +72,45 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | `.agents/skills/` | mei's skills |
 | `state/` | what the daemon stores, described below |
 
-When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit, and it is where mei works: every run starts there. To talk to mei without the daemon, run `pi-bolt` in the home.
+When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit. Scheduled runs and memory writing start in the home; a chat session starts in the folder the router picked for it.
 
-`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`.
+Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
+
+`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
 
 ## Configuration
 
 `config.toml` in the home holds the settings. Restart the daemon after changing it.
 
 ```toml
-[chat]
-model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; empty uses Pi's default
+[roles.chat]                 # one block per role; add as many as you like
+model = "anthropic/claude-haiku-5-5"   # model for this role, as provider/id; empty uses Pi's default
+use = "casual conversation, quick questions, language practice"   # tells the router when to pick it
+
+[roles.coder]
+model = "anthropic/claude-opus-5-5"
+use = "writing or changing code, debugging"
 
 [router]
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
+default_role = "chat"    # role used when the router fails or picks no known role
+
+[character]
+enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
+model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
 [idle]
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
 ```
 
-The instructions for the router's decision are in `prompts/route.md` in this checkout.
+Each message goes through up to three runs:
+
+1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder until it closes; a session that continues a closed one gets a fresh pick.
+2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
+3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks, seeing the last two exchanges of the session. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+
+Memory is written from the working agent's transcript, so it holds the original answers. The voice follows `CHARACTER.md` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
 ## Schedules
 
@@ -150,6 +173,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run daemon` | start the daemon in the foreground |
 | `npm run chat -- "<prompt>"` | send a message and print the answer |
 | `npm run status` | list schedules, closed sessions and recent messages |
+| `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 
@@ -157,11 +181,15 @@ To keep the daemon running whenever you are logged in, and to chat from any dire
 
 ```sh
 make install                    # with Nix: nix-shell --run "make install"
-mei "hi"
+mei chat "hi"
+mei status
+mei reset --yes                 # permanently clear memory, history, logs and inbox
 journalctl --user -u mei        # what the daemon printed
 ```
 
 `make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
+
+The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>` and `mei listen [--after <event number>]` are also available. Run `mei --help` for usage.
 
 `make uninstall` stops the service and removes both files.
 

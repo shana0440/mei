@@ -1,6 +1,6 @@
-# mei
+# Instructions
 
-mei is a personal assistant.
+You are a personal assistant.
 
 ## Where things are
 
