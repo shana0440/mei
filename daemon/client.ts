@@ -2,10 +2,7 @@ import { connect } from "node:net";
 import { socketPath } from "./paths.ts";
 import type { Message, Reply, RequestType } from "./protocol.ts";
 
-export function request<T extends RequestType>(
-  message: Message<T>,
-  onLine: (line: unknown) => void = () => {},
-): Promise<Reply<T>> {
+export function stream<T extends RequestType>(message: Message<T>, onLine: (line: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const connection = connect(socketPath);
     let received = "";
@@ -16,18 +13,27 @@ export function request<T extends RequestType>(
       reject(notRunning ? new Error("The mei daemon is not running. Start it with: npm run daemon") : error);
     });
     connection.on("data", (chunk: string) => {
-      received += chunk;
-      const lines = received.split("\n");
-      received = lines.slice(-2).join("\n");
-      lines.slice(0, -2).forEach((line) => onLine(JSON.parse(line)));
+      const lines = (received + chunk).split("\n");
+      received = lines.pop() ?? "";
+      lines.forEach(onLine);
     });
-    connection.on("end", () => {
-      if (!received) return reject(new Error("The mei daemon stopped before replying"));
-      const reply: Reply<T> & { error?: string } = JSON.parse(received);
-      if (reply.error) reject(new Error(reply.error));
-      else resolve(reply);
-    });
+    connection.on("end", resolve);
   });
+}
+
+export async function request<T extends RequestType>(
+  message: Message<T>,
+  onLine: (line: unknown) => void = () => {},
+): Promise<Reply<T>> {
+  let last: string | undefined;
+  await stream(message, (line) => {
+    if (last !== undefined) onLine(JSON.parse(last));
+    last = line;
+  });
+  if (last === undefined) throw new Error("The mei daemon stopped before replying");
+  const reply: Reply<T> & { error?: string } = JSON.parse(last);
+  if (reply.error) throw new Error(reply.error);
+  return reply;
 }
 
 export async function runCommand(command: () => Promise<void>): Promise<void> {
