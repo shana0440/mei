@@ -2,7 +2,7 @@ import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
 import type { Config, Schedule } from "./config.ts";
-import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
+import { getEvent, markDone, markFailed, markRunning, pendingEvents } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
@@ -116,13 +116,31 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
+function commandSchedule({ type, payload }: InboxEvent): string | undefined {
+  const schedule = payload as Omit<Schedule, "spec">;
+  return type === "timer.fired" && "command" in schedule ? schedule.name : undefined;
+}
+
 export function startWorker(deps: Deps): () => void {
-  let working = false;
-  async function work(): Promise<void> {
-    if (working) return;
-    working = true;
-    for (let event = nextPending(deps.db); event; event = nextPending(deps.db)) await handle(deps, event);
-    working = false;
+  let agentBusy = false;
+  const runningCommands = new Set<string>();
+  function work(): void {
+    for (const event of pendingEvents(deps.db)) {
+      const command = commandSchedule(event);
+      if (command !== undefined && !runningCommands.has(command)) {
+        runningCommands.add(command);
+        void handle(deps, event).finally(() => {
+          runningCommands.delete(command);
+          work();
+        });
+      } else if (command === undefined && !agentBusy) {
+        agentBusy = true;
+        void handle(deps, event).finally(() => {
+          agentBusy = false;
+          work();
+        });
+      }
+    }
   }
-  return () => void work();
+  return work;
 }

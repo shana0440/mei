@@ -24,7 +24,7 @@ mei's home is three levels up from this file's directory. Paths below are relati
 
    Optional keys: `notify = false` keeps the results from the user; `model = "provider/id"` for a prompt; `timeout_minutes` for a command, 10 when left out.
 4. Run `mei reload`. When it reports an error, fix `config.toml` and reload again.
-5. Run `mei job <name>`. It runs after your answer, since mei does one thing at a time.
-6. Show the user the block and the result of your own run of the script or prompt, and tell them the queued run's result will appear in `mei status`.
+5. Run `mei job <name>`. A command runs right away: check its result with `mei status`. A prompt runs after your answer, since agent runs go one at a time.
+6. Show the user the block and the result of the test run, or of your own run of the prompt.
 
 To remove a schedule, delete its block, reload, and delete its script or prompt.

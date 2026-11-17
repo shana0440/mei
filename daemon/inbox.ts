@@ -40,8 +40,8 @@ export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: num
   return Number(lastInsertRowid);
 }
 
-export function nextPending(db: DatabaseSync): InboxEvent | undefined {
-  return findEvents(db, "WHERE status = 'pending' ORDER BY id LIMIT 1")[0];
+export function pendingEvents(db: DatabaseSync): InboxEvent[] {
+  return findEvents(db, "WHERE status = 'pending' ORDER BY id");
 }
 
 export function markRunning(db: DatabaseSync, id: number, now: number): void {

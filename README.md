@@ -19,7 +19,7 @@ npm run chat -- --debug "hi"    # also show where the message went and the work 
 npm run status                  # list pending, running and recent messages, and recently closed sessions
 ```
 
-mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
+mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt or a session being written into memory is in progress. [Command schedules](#schedules) need no agent and run alongside.
 
 mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic and role in brackets before the answer:
 
@@ -141,7 +141,7 @@ every_minutes = 60
 timeout_minutes = 5      # stop it, with everything it started, after this long; left out means 10
 ```
 
-Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
+It runs as soon as it is due, without waiting for agent runs, and at most one run of each command schedule runs at a time. Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
 
 Ask mei to schedule something and it writes the script or prompt, adds the block and reloads, following the `schedule` skill in the home.
 
