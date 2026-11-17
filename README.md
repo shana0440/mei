@@ -143,6 +143,8 @@ timeout_minutes = 5      # stop it, with everything it started, after this long;
 
 Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
 
+Ask mei to schedule something and it writes the script or prompt, adds the block and reloads, following the `schedule` skill in the home.
+
 Every prompt run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 A prompt file is plain text. mei replaces these placeholders before the run, and any other `{{name}}` fails the run:
