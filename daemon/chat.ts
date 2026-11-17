@@ -2,7 +2,7 @@ import { parseArgs } from "node:util";
 import { request, runCommand } from "./client.ts";
 
 type DebugLine =
-  | { type: "mei_route"; topic: string; isNew: boolean; reason: string }
+  | { type: "mei_route"; topic: string; role: string; isNew: boolean; reason: string }
   | { type: "message_update"; assistantMessageEvent: { type: string; delta?: string } }
   | { type: "tool_execution_start"; toolName: string; args: Record<string, unknown> };
 
@@ -14,7 +14,7 @@ function mainArgument(args: Record<string, unknown>): string {
 function render(line: DebugLine): string {
   switch (line.type) {
     case "mei_route":
-      return `[route] ${line.isNew ? "new session" : "resume"} "${line.topic}": ${line.reason}\n`;
+      return `[route] ${line.isNew ? "new session" : "resume"} "${line.topic}" as ${line.role}: ${line.reason}\n`;
     case "tool_execution_start":
       return `[tool] ${line.toolName} ${mainArgument(line.args)}\n`;
     case "message_update": {

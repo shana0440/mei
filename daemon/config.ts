@@ -7,9 +7,11 @@ import { home } from "./paths.ts";
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
 export type Schedule = { name: string; prompt: string; model: string; notify: boolean; spec: ScheduleSpec };
 
+export type Role = { name: string; model: string; use: string };
+
 export type Config = {
-  chat: { model: string };
-  router: { model: string };
+  roles: Role[];
+  router: { model: string; defaultRole: string };
   idle: { afterMinutes: number; model: string };
   schedules: Schedule[];
 };
@@ -69,6 +71,17 @@ function schedule(table: TomlTable, index: number): Schedule {
   };
 }
 
+function roles(data: TomlTable): Role[] {
+  const { table } = section(data, "roles");
+  const list = Object.entries(table).map(([name, role]) => {
+    if (!isTable(role)) throw new Error(`roles.${name} must be written as [roles.${name}]`);
+    const from = { label: `roles.${name}`, table: role };
+    return { name, model: text(from, "model"), use: text(from, "use") };
+  });
+  if (list.length === 0) throw new Error("define at least one role as [roles.<name>] with model and use");
+  return list;
+}
+
 function schedules(data: TomlTable): Schedule[] {
   const tables = data.schedule ?? [];
   if (!Array.isArray(tables) || !tables.every(isTable)) throw new Error("schedule must be written as [[schedule]]");
@@ -81,9 +94,15 @@ function schedules(data: TomlTable): Schedule[] {
 export function loadConfig(path: string): Config {
   try {
     const data = parse(readFileSync(path, "utf8"));
+    const router = section(data, "router");
+    const defaultRole = text(router, "default_role");
+    const roleList = roles(data);
+    if (!roleList.some(({ name }) => name === defaultRole)) {
+      throw new Error(`router.default_role "${defaultRole}" is not defined under [roles]`);
+    }
     return {
-      chat: { model: text(section(data, "chat"), "model") },
-      router: { model: text(section(data, "router"), "model") },
+      roles: roleList,
+      router: { model: text(router, "model"), defaultRole },
       idle: {
         afterMinutes: positiveNumber(section(data, "idle"), "after_minutes"),
         model: text(section(data, "idle"), "model"),

@@ -21,17 +21,17 @@ npm run status                  # list pending, running and recent messages, and
 
 mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
 
-mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic in brackets before the answer:
+mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic and role in brackets before the answer:
 
 ```
 $ npm run -s chat -- "Remember the word walrus for a word game. Reply ok."
-[Remember word walrus]
+[Remember word walrus · chat]
 ok
 $ npm run -s chat -- "What is 17 times 3? Just the number."
-[Multiply 17 by 3]
+[Multiply 17 by 3 · chat]
 51
 $ npm run -s chat -- "Back to the word game: spell the word backwards."
-[Remember word walrus]
+[Remember word walrus · chat]
 s-u-r-l-a-w
 ```
 
@@ -41,11 +41,11 @@ A subject outlives its sessions through memory. When a session closes, mei saves
 
 ```
 $ npm run -s chat -- "Plan a three-day trip to Kyoto. One theme per day."
-[Kyoto trip plan]
+[Kyoto trip plan · chat]
 Day 1: temples ...
 $ # more than 30 minutes later
 $ npm run -s chat -- "For the Kyoto trip, swap day one and day three."
-[Kyoto trip plan]
+[Kyoto trip plan · chat]
 Day 1 is now ...
 ```
 
@@ -83,18 +83,24 @@ Edit `CHARACTER.md` to change the assistant's identity and communication prefere
 `config.toml` in the home holds the settings. Restart the daemon after changing it.
 
 ```toml
-[chat]
-model = "anthropic/claude-haiku-5-5"   # model for chat runs, as provider/id; empty uses Pi's default
+[roles.chat]                 # one block per role; add as many as you like
+model = "anthropic/claude-haiku-5-5"   # model for this role, as provider/id; empty uses Pi's default
+use = "casual conversation, quick questions, language practice"   # tells the router when to pick it
+
+[roles.coder]
+model = "anthropic/claude-opus-5-5"
+use = "writing or changing code, debugging"
 
 [router]
 model = "anthropic/claude-haiku-5-5"   # model that decides which session a message belongs to
+default_role = "chat"    # role used when the router fails or picks no known role
 
 [idle]
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
 ```
 
-The instructions for the router's decision are in `prompts/route.md` in this checkout.
+The router picks a role for each new session from the roles' `use`, and the session keeps that role until it closes; a session that continues a closed one gets a fresh pick. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
 ## Schedules
 

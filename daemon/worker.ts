@@ -28,8 +28,8 @@ const handlers: Record<string, Handler | undefined> = {
     const logFile = join(logsDir, `${event.id}.jsonl`);
     const onLine = (line: string) => deps.onLine(event.id, line);
 
-    const { sessionId, topic, isNew, reason, context } = await route(deps, text);
-    const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, isNew, reason });
+    const { sessionId, topic, role, isNew, reason, context } = await route(deps, text);
+    const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, role: role.name, isNew, reason });
     appendFileSync(logFile, `${routeLine}\n`);
     onLine(routeLine);
 
@@ -37,17 +37,17 @@ const handlers: Record<string, Handler | undefined> = {
       prompt: text,
       sessionId,
       sessionDir: chatSessionsDir,
-      model: deps.config.chat.model,
+      model: role.model,
       appendSystemPrompt: context,
       logFile,
       onLine,
     });
     if (!ok) throw new Error(error);
     const now = Date.now();
-    recordActivity(deps.db, { id: sessionId, topic, context, eventId: event.id }, now);
+    recordActivity(deps.db, { id: sessionId, topic, role: role.name, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
     deps.rearm();
-    return { result: response, sessionId, topic };
+    return { result: response, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
     const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;

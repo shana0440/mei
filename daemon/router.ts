@@ -3,10 +3,11 @@ import { readFileSync } from "node:fs";
 import { routePromptPath } from "./paths.ts";
 import { closedSessions, sessionsActiveSince } from "./sessions.ts";
 import type { ClosedSession } from "./sessions.ts";
+import type { Role } from "./config.ts";
 import type { Deps } from "./worker.ts";
 
-export type Route = { sessionId: string; topic: string; isNew: boolean; reason: string; context: string };
-type Answer = { session?: unknown; continues?: unknown; topic?: unknown; reason?: unknown };
+export type Route = { sessionId: string; topic: string; role: Role; isNew: boolean; reason: string; context: string };
+type Answer = { session?: unknown; continues?: unknown; topic?: unknown; role?: unknown; reason?: unknown };
 
 const exchangeLength = 500;
 const day = 24 * 60 * 60_000;
@@ -47,9 +48,13 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
   const now = Date.now();
   const sessions = sessionsActiveSince(db, now - config.idle.afterMinutes * 60_000);
   const closed = closedSessions(db, now - offeredDays * day);
-  const newSession = (topic: string, reason: string, continued?: ClosedSession): Route => ({
+  const findRole = (name: unknown) =>
+    config.roles.find((role) => role.name === name) ??
+    (config.roles.find((role) => role.name === config.router.defaultRole) as Role);
+  const newSession = (topic: string, reason: string, continued?: ClosedSession, role?: unknown): Route => ({
     sessionId: randomUUID(),
     topic,
+    role: findRole(role),
     isNew: true,
     reason,
     context: shortTermMemory(closed, continued, now),
@@ -65,6 +70,7 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
       lastReply: cut(session.lastReply, exchangeLength),
     })),
     closed: closed.map(({ id, topic, summary }) => ({ id, topic, summary })),
+    roles: config.roles.map(({ name, use }) => ({ name, use })),
   };
   const { ok, response, error } = await run({
     prompt: readFileSync(routePromptPath, "utf8") + JSON.stringify(data, null, 2),
@@ -79,9 +85,10 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
   const reason = typeof answer.reason === "string" ? answer.reason : "";
   if (answer.session === "new") {
     const continued = closed.find(({ id }) => id === answer.continues);
-    return newSession(continued?.topic ?? topic, reason, continued);
+    return newSession(continued?.topic ?? topic, reason, continued, answer.role);
   }
   const session = sessions.find(({ id }) => id === answer.session);
   if (!session) return newSession(firstWords(text), `The router gave no usable answer: ${cut(response, 200)}`);
-  return { sessionId: session.id, topic: session.topic, isNew: false, reason, context: session.context };
+  const { id, topic: sessionTopic, role, context } = session;
+  return { sessionId: id, topic: sessionTopic, role: findRole(role), isNew: false, reason, context };
 }
