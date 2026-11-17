@@ -118,10 +118,10 @@ Memory is written from the working agent's transcript, so it holds the original 
 
 ## Schedules
 
-mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
+mei runs a prompt or a command on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
 
 ```toml
-# Each [[schedule]] needs a unique name, a prompt file relative to the home,
+# Each [[schedule]] needs a unique name, exactly one of prompt or command,
 # and exactly one of daily_at or every_minutes.
 [[schedule]]
 name = "dream"
@@ -131,7 +131,19 @@ model = ""               # model for this job; empty uses Pi's default
 notify = false           # keep this job's results out of the listen stream; left out means true
 ```
 
-Every run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
+A command schedule runs without an agent, for jobs that need no model:
+
+```toml
+[[schedule]]
+name = "reddit-top"
+command = "scripts/reddit-top.sh"   # run with sh -c in the home
+every_minutes = 60
+timeout_minutes = 5      # stop it, with everything it started, after this long; left out means 10
+```
+
+Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
+
+Every prompt run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 A prompt file is plain text. mei replaces these placeholders before the run, and any other `{{name}}` fails the run:
 

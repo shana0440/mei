@@ -5,7 +5,10 @@ import type { TomlTable, TomlValue } from "smol-toml";
 import { home } from "./paths.ts";
 
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
-export type Schedule = { name: string; prompt: string; model: string; notify: boolean; spec: ScheduleSpec };
+export type Job = { prompt: string; model: string } | { command: string; timeoutMinutes: number };
+export type Schedule = { name: string; notify: boolean; spec: ScheduleSpec } & Job;
+
+const defaultTimeoutMinutes = 10;
 
 export type Role = { name: string; model: string; use: string };
 
@@ -52,18 +55,31 @@ function timeOfDay(from: Section, key: string): string {
   return value;
 }
 
+function job(from: Section): Job {
+  const { label, table } = from;
+  if ("prompt" in table === "command" in table) throw new Error(`${label} needs exactly one of prompt or command`);
+  if ("command" in table) {
+    if ("model" in table) throw new Error(`${label} runs a command, which uses no model`);
+    return {
+      command: text(from, "command"),
+      timeoutMinutes: "timeout_minutes" in table ? positiveNumber(from, "timeout_minutes") : defaultTimeoutMinutes,
+    };
+  }
+  if ("timeout_minutes" in table) throw new Error(`${label}: timeout_minutes applies only to a command`);
+  const prompt = text(from, "prompt");
+  if (!existsSync(join(home, prompt))) throw new Error(`${label}: the prompt file ${prompt} does not exist`);
+  return { prompt, model: "model" in table ? text(from, "model") : "" };
+}
+
 function schedule(table: TomlTable, index: number): Schedule {
   const name = text({ label: `schedule ${index + 1}`, table }, "name");
   const from = { label: `schedule "${name}"`, table };
-  const prompt = text(from, "prompt");
-  if (!existsSync(join(home, prompt))) throw new Error(`${from.label}: the prompt file ${prompt} does not exist`);
   if ("daily_at" in table === "every_minutes" in table) {
     throw new Error(`${from.label} needs exactly one of daily_at or every_minutes`);
   }
   return {
     name,
-    prompt,
-    model: "model" in table ? text(from, "model") : "",
+    ...job(from),
     notify: "notify" in table ? flag(from, "notify") : true,
     spec:
       "daily_at" in table

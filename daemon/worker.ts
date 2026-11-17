@@ -7,6 +7,7 @@ import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
+import { runScript } from "./script.ts";
 import type { run } from "./runner.ts";
 import { recordActivity, saveSummary } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
@@ -53,25 +54,24 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: voiced, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
-    const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
+    const schedule = event.payload as Omit<Schedule, "spec">;
     const startedAt = Date.now();
-    const template = readFileSync(join(home, prompt), "utf8");
-    const key = `watermark:${name}`;
+    const key = `watermark:${schedule.name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
-    const { ok, response, error } = await deps.run({
-      prompt: fillPrompt(template, {
-        now: new Date(startedAt).toLocaleString(),
-        last_run: watermark ? new Date(watermark).toISOString() : "never",
-        sessions_dir: chatSessionsDir,
-      }),
-      model,
-      logFile: join(logsDir, `${event.id}.jsonl`),
-    });
-    if (!ok) throw new Error(error);
+    const lastRun = watermark ? new Date(watermark).toISOString() : "never";
+    const logFile = join(logsDir, `${event.id}.jsonl`);
+    const result =
+      "command" in schedule
+        ? await runScript({ ...schedule, env: { MEI_LAST_RUN: lastRun }, logFile })
+        : await runPrompt(deps, {
+            ...schedule,
+            values: { now: new Date(startedAt).toLocaleString(), last_run: lastRun, sessions_dir: chatSessionsDir },
+            logFile,
+          });
     deps.db.prepare(
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     ).run(key, String(startedAt));
-    return { result: response, topic: name };
+    return { result, topic: schedule.name };
   },
   "session.idle": async (event, deps) => {
     const { sessionId } = event.payload as { sessionId: string };
@@ -90,6 +90,18 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: response, sessionId };
   },
 };
+
+type PromptOptions = { prompt: string; model: string; values: Record<string, string>; logFile: string };
+
+async function runPrompt(deps: Deps, { prompt, model, values, logFile }: PromptOptions): Promise<string> {
+  const { ok, response, error } = await deps.run({
+    prompt: fillPrompt(readFileSync(join(home, prompt), "utf8"), values),
+    model,
+    logFile,
+  });
+  if (!ok) throw new Error(error);
+  return response;
+}
 
 async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   const { db } = deps;
