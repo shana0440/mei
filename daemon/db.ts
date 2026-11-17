@@ -37,19 +37,34 @@ const migrations = [
   "ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT ''",
   `ALTER TABLE events ADD COLUMN step TEXT NOT NULL DEFAULT 'agent';
-   ALTER TABLE events ADD COLUMN handoff TEXT;
-   UPDATE events SET handoff = result, result = NULL WHERE status IN ('pending', 'running');
+   ALTER TABLE events ADD COLUMN command_output TEXT;
+   UPDATE events SET command_output = result, result = NULL WHERE status IN ('pending', 'running');
    UPDATE events SET step = 'command'
-   WHERE status IN ('pending', 'running') AND handoff IS NULL
-     AND type = 'timer.fired' AND json_extract(payload, '$.command') IS NOT NULL;
-   DELETE FROM kv WHERE key LIKE 'watermark:%'`,
+   WHERE status IN ('pending', 'running') AND command_output IS NULL
+     AND type = 'timer.fired' AND json_extract(payload, '$.command') IS NOT NULL`,
+  (db: DatabaseSync) => {
+    const columns = db.prepare("PRAGMA table_info(events)").all();
+    if (columns.some(({ name }) => name === "command_output")) {
+      db.exec("ALTER TABLE events RENAME COLUMN command_output TO handoff");
+    }
+    db.exec("DELETE FROM kv WHERE key LIKE 'watermark:%'");
+  },
 ];
 
 export function openDb(path: string): DatabaseSync {
   const db = new DatabaseSync(path);
   const applied = db.prepare("PRAGMA user_version").get()?.user_version as number;
   migrations.slice(applied).forEach((migration, index) => {
-    db.exec(`BEGIN; ${migration}; PRAGMA user_version = ${applied + index + 1}; COMMIT`);
+    db.exec("BEGIN");
+    try {
+      if (typeof migration === "string") db.exec(migration);
+      else migration(db);
+      db.exec(`PRAGMA user_version = ${applied + index + 1}; COMMIT`);
+    } catch (error) {
+      db.exec("ROLLBACK");
+      db.close();
+      throw error;
+    }
   });
   return db;
 }
