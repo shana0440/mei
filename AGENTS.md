@@ -1,4 +1,4 @@
-# Developing mei
+# mei
 
 mei is a personal assistant that runs as a daemon. This repo is how the service works. How mei behaves lives in its home (`~/.local/share/mei`): instructions, prompts, skills, memory. `template/` is what a new home starts with, so a change to mei's behaviour is a change in `template/`.
 
@@ -16,7 +16,8 @@ Every document here, this file included, is for someone new to the repo. Keep on
 
 ## Verify
 
-Don't write unit tests. Check a change the way a user would: start the daemon with `MEI_HOME` set to a temporary directory and use `npm run chat`, `status` and `job`. An installed service is someone's real assistant: leave it and its home alone.
+- Don't write unit tests.
+- Check a change the way a user would: start the daemon with `MEI_HOME` set to a temporary directory and use `npm run chat`, `status` and `job`. An installed service is someone's real assistant: leave it and its home alone. When the check is done, stop the daemon you started and delete the temporary home and every other file the check created.
 
 ## Workflow
 
