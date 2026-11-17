@@ -1,12 +1,13 @@
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Config, Schedule } from "./config.ts";
-import { getEvent, markDone, markFailed, markRunning, nextPending } from "./inbox.ts";
+import type { Config, ScheduledJob } from "./config.ts";
+import { getEvent, markDone, markFailed, markRunning, pendingEvents, queueForAgent } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
+import { runScript } from "./script.ts";
 import type { run } from "./runner.ts";
 import { recordActivity, saveSummary } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
@@ -21,7 +22,7 @@ export type Deps = {
   onFinished: (event: InboxEvent) => void;
 };
 
-type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome>;
+type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome | { commandOutput: string }>;
 
 const handlers: Record<string, Handler | undefined> = {
   "user.message": async (event, deps) => {
@@ -53,25 +54,34 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: voiced, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
-    const { name, prompt, model } = event.payload as Omit<Schedule, "spec">;
+    const schedule = event.payload as ScheduledJob;
     const startedAt = Date.now();
-    const template = readFileSync(join(home, prompt), "utf8");
-    const key = `watermark:${name}`;
+    const key = `watermark:${schedule.name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
-    const { ok, response, error } = await deps.run({
-      prompt: fillPrompt(template, {
-        now: new Date(startedAt).toLocaleString(),
-        last_run: watermark ? new Date(watermark).toISOString() : "never",
-        sessions_dir: chatSessionsDir,
-      }),
-      model,
-      logFile: join(logsDir, `${event.id}.jsonl`),
-    });
-    if (!ok) throw new Error(error);
+    const lastRun = watermark ? new Date(watermark).toISOString() : "never";
+    const logFile = join(logsDir, `${event.id}.jsonl`);
+    let output = event.result;
+    if ("command" in schedule && output === null) {
+      output = await runScript({ ...schedule, env: { MEI_LAST_RUN: lastRun }, logFile });
+      if ("prompt" in schedule) return { commandOutput: output };
+    }
+    const result =
+      "prompt" in schedule
+        ? await runPrompt(deps, {
+            ...schedule,
+            values: {
+              now: new Date(startedAt).toLocaleString(),
+              last_run: lastRun,
+              sessions_dir: chatSessionsDir,
+              ...(output === null ? {} : { output }),
+            },
+            logFile,
+          })
+        : (output ?? "");
     deps.db.prepare(
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     ).run(key, String(startedAt));
-    return { result: response, topic: name };
+    return { result, topic: schedule.name };
   },
   "session.idle": async (event, deps) => {
     const { sessionId } = event.payload as { sessionId: string };
@@ -91,26 +101,58 @@ const handlers: Record<string, Handler | undefined> = {
   },
 };
 
+type PromptOptions = { prompt: string; model: string; values: Record<string, string>; logFile: string };
+
+async function runPrompt(deps: Deps, { prompt, model, values, logFile }: PromptOptions): Promise<string> {
+  const { ok, response, error } = await deps.run({
+    prompt: fillPrompt(readFileSync(join(home, prompt), "utf8"), values),
+    model,
+    logFile,
+  });
+  if (!ok) throw new Error(error);
+  return response;
+}
+
 async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   const { db } = deps;
   markRunning(db, event.id, Date.now());
   try {
     const handler = handlers[event.type];
     if (!handler) throw new Error(`No handler for event type "${event.type}"`);
-    markDone(db, event.id, await handler(event, { ...deps }), Date.now());
+    const handled = await handler(event, { ...deps });
+    if ("commandOutput" in handled) return queueForAgent(db, event.id, handled.commandOutput);
+    markDone(db, event.id, handled, Date.now());
   } catch (error) {
     markFailed(db, event.id, (error as Error).message, Date.now());
   }
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
+function commandToRun({ type, payload, result }: InboxEvent): string | undefined {
+  const schedule = payload as ScheduledJob;
+  return type === "timer.fired" && "command" in schedule && result === null ? schedule.name : undefined;
+}
+
 export function startWorker(deps: Deps): () => void {
-  let working = false;
-  async function work(): Promise<void> {
-    if (working) return;
-    working = true;
-    for (let event = nextPending(deps.db); event; event = nextPending(deps.db)) await handle(deps, event);
-    working = false;
+  let agentBusy = false;
+  const runningCommands = new Set<string>();
+  function work(): void {
+    for (const event of pendingEvents(deps.db)) {
+      const command = commandToRun(event);
+      if (command !== undefined && !runningCommands.has(command)) {
+        runningCommands.add(command);
+        void handle(deps, event).finally(() => {
+          runningCommands.delete(command);
+          work();
+        });
+      } else if (command === undefined && !agentBusy) {
+        agentBusy = true;
+        void handle(deps, event).finally(() => {
+          agentBusy = false;
+          work();
+        });
+      }
+    }
   }
-  return () => void work();
+  return work;
 }

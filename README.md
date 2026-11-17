@@ -19,7 +19,7 @@ npm run chat -- --debug "hi"    # also show where the message went and the work 
 npm run status                  # list pending, running and recent messages, and recently closed sessions
 ```
 
-mei does one thing at a time, oldest first: a message waits while an earlier message, a scheduled run or a session being written into memory is in progress.
+mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt or a session being written into memory is in progress. [Command schedules](#schedules) need no agent and run alongside.
 
 mei keeps one session per task. For every message it decides whether you are continuing an open session or starting a new one, and prints the session's topic and role in brackets before the answer:
 
@@ -118,20 +118,48 @@ Memory is written from the working agent's transcript, so it holds the original 
 
 ## Schedules
 
-mei runs a prompt on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
+mei runs a prompt or a command on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
 
 ```toml
-# Each [[schedule]] needs a unique name, a prompt file relative to the home,
+# Each [[schedule]] needs a unique name, a prompt, a command or both,
 # and exactly one of daily_at or every_minutes.
 [[schedule]]
 name = "dream"
 prompt = "prompts/dream.md"
 daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
-model = ""               # model for this job; empty uses Pi's default
+role = "chat"            # the prompt runs with this role's model; left out means router.default_role
 notify = false           # keep this job's results out of the listen stream; left out means true
 ```
 
-Every run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
+Pick the role whose `use` fits the job, so changing a role's model moves its schedules too. To give one schedule its own model, write `model = "provider/id"` in place of `role`.
+
+A command schedule runs without an agent, for jobs that need no model:
+
+```toml
+[[schedule]]
+name = "reddit-top"
+command = "scripts/reddit-top.sh"   # run with sh -c in the home
+every_minutes = 60
+timeout_minutes = 5      # stop it, with everything it started, after this long; left out means 10
+```
+
+It runs as soon as it is due, without waiting for agent runs, and at most one run of each command schedule runs at a time. Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
+
+A schedule with both runs the command first and hands its stdout to the prompt as `{{output}}`, so a script can fetch the data and the agent only judges it:
+
+```toml
+[[schedule]]
+name = "reddit-funniest"
+command = "scripts/reddit-top.sh"
+prompt = "prompts/reddit-funniest.md"   # "Pick the funniest of these posts: {{output}}"
+daily_at = "09:00"
+```
+
+The command runs as soon as it is due; the prompt then waits its turn with the other agent runs, and its answer is the result. A failed command fails the run without starting the agent. Until the prompt runs, `npm run status` shows the command's output for the run.
+
+Ask mei to schedule something and it writes the script or prompt, adds the block and reloads, following the `schedule` skill in the home.
+
+Every prompt run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
 A prompt file is plain text. mei replaces these placeholders before the run, and any other `{{name}}` fails the run:
 
@@ -140,6 +168,7 @@ A prompt file is plain text. mei replaces these placeholders before the run, and
 | `{{now}}` | the current local date and time |
 | `{{last_run}}` | when this schedule last ran successfully, as a UTC timestamp like `2026-01-31T19:00:00.000Z`, or `never` |
 | `{{sessions_dir}}` | the absolute path of the directory holding one `.jsonl` transcript per chat session |
+| `{{output}}` | the stdout of the schedule's command; only in a schedule that has one |
 
 ```sh
 npm run job -- dream            # run a schedule now

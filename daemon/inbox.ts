@@ -40,8 +40,8 @@ export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: num
   return Number(lastInsertRowid);
 }
 
-export function nextPending(db: DatabaseSync): InboxEvent | undefined {
-  return findEvents(db, "WHERE status = 'pending' ORDER BY id LIMIT 1")[0];
+export function pendingEvents(db: DatabaseSync): InboxEvent[] {
+  return findEvents(db, "WHERE status = 'pending' ORDER BY id");
 }
 
 export function markRunning(db: DatabaseSync, id: number, now: number): void {
@@ -54,6 +54,10 @@ export function markDone(db: DatabaseSync, id: number, { result, sessionId, topi
   db.prepare(
     "UPDATE events SET status = 'done', result = ?, session_id = ?, topic = ?, finished_at = ? WHERE id = ?",
   ).run(result, sessionId ?? null, topic ?? null, now, id);
+}
+
+export function queueForAgent(db: DatabaseSync, id: number, commandOutput: string): void {
+  db.prepare("UPDATE events SET status = 'pending', result = ?, attempts = 0 WHERE id = ?").run(commandOutput, id);
 }
 
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {
