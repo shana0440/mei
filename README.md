@@ -63,7 +63,8 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 
 | Path | What it is |
 |---|---|
-| `AGENTS.md` | mei's instructions |
+| `AGENTS.md` | operating instructions |
+| `CHARACTER.md` | assistant name, language, tone and speaking style |
 | `PROJECTS.md` | the locations on your machine and what each is for |
 | `config.toml` | settings |
 | `prompts/` | `summarize.md`, `dream.md` and the prompts of your own schedules |
@@ -71,7 +72,9 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | `.agents/skills/` | mei's skills |
 | `state/` | what the daemon stores, described below |
 
-When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit, and it is where mei works: every run starts there. To talk to mei without the daemon, run `pi-bolt` in the home.
+When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit, and it is where mei works: every run starts there.
+
+Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is loaded on every daemon run, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
 `state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`.
 

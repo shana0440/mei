@@ -1,6 +1,6 @@
 import { spawn } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
-import { dirname } from "node:path";
+import { appendFileSync, mkdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import { home } from "./paths.ts";
 
 export type RunOptions = {
@@ -40,6 +40,8 @@ function sessionArgs({ sessionId, sessionDir }: RunOptions): string[] {
 }
 
 function runArgs(options: RunOptions): string[] {
+  const character = readFileSync(join(home, "CHARACTER.md"), "utf8");
+  const systemPrompt = [character, options.appendSystemPrompt].filter(Boolean).join("\n\n");
   return [
     "--mode",
     "json",
@@ -47,7 +49,8 @@ function runArgs(options: RunOptions): string[] {
     ...(options.model ? ["--model", options.model] : []),
     ...(options.tools === false ? ["--no-tools"] : []),
     ...(options.contextFiles === false ? ["--no-context-files"] : []),
-    ...(options.appendSystemPrompt ? ["--append-system-prompt", options.appendSystemPrompt] : []),
+    "--append-system-prompt",
+    systemPrompt,
     "--",
     options.prompt,
   ];
