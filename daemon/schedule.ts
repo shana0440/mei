@@ -1,8 +1,11 @@
+import { join } from "node:path";
 import { request, runCommand } from "./client.ts";
+import { home } from "./paths.ts";
 import type { ScheduleListing } from "./protocol.ts";
 
 const usage = `Usage:
   mei schedule list
+  mei schedule add "<what to run and when>"
   mei schedule remove <name>
   mei schedule enable <name>
   mei schedule disable <name>`;
@@ -30,6 +33,14 @@ await runCommand(async () => {
   const [action, ...args] = process.argv.slice(2);
   if (action === "list" && args.length === 0) {
     list((await request({ type: "schedules" })).schedules);
+    return;
+  }
+  if (action === "add" && args.length === 1) {
+    const skill = join(home, ".agents", "skills", "schedule", "SKILL.md");
+    const text = `Follow ${skill} to schedule this: ${args[0]}`;
+    const { result, topic } = await request({ type: "chat", text });
+    console.error(`[${topic}]`);
+    console.log(result);
     return;
   }
   if ((action === "remove" || action === "enable" || action === "disable") && args.length === 1) {

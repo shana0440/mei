@@ -157,7 +157,7 @@ daily_at = "09:00"
 
 The command runs as soon as it is due; the prompt then waits its turn with the other agent runs, and its answer is the result. A failed command fails the run without starting the agent. Until the prompt runs, `npm run status` shows the command's output for the run.
 
-Ask mei to schedule something and it writes the script or prompt, adds the block and reloads, following the `schedule` skill in the home.
+Ask mei to schedule something and it writes the script or prompt and adds the schedule, following the `schedule` skill in the home.
 
 Every prompt run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
 
@@ -178,11 +178,14 @@ npm run status                  # also lists each schedule with its next run
 ### Managing schedules
 
 ```sh
+npm run schedule -- add "every morning at 8, the top post of r/programming"
 npm run schedule -- list                # every schedule: enabled or disabled, when it runs, its next run
 npm run schedule -- disable dream       # stop it firing; its block stays in config.toml
 npm run schedule -- enable dream
 npm run schedule -- remove dream        # delete its block; its script or prompt stays
 ```
+
+`add` sends the description to mei as a chat message, and mei follows the `schedule` skill: it decides on a command, a prompt or both, writes the script or prompt, adds the block, reloads, runs the job once and answers with what it made.
 
 `remove`, `enable` and `disable` change the block in `config.toml` and apply it to the running daemon, the same as editing the file and running `mei reload`. An unknown name is reported, and an invalid `config.toml` is reported and left unchanged.
 
@@ -225,7 +228,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
-| `npm run schedule -- <list\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
+| `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
