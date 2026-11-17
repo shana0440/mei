@@ -46,7 +46,7 @@ const handlers: Record<string, Handler | undefined> = {
       onLine,
     });
     if (!ok) throw new Error(error);
-    const voiced = await voice(deps, { message: text, answer: response, sessionId, logFile });
+    const voiced = await voice(deps, { message: text, answer: response, logFile });
     const now = Date.now();
     recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
@@ -81,7 +81,8 @@ const handlers: Record<string, Handler | undefined> = {
     deps.db.prepare(
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     ).run(key, String(startedAt));
-    return { result, topic: schedule.name };
+    const said = schedule.notify ? await voice(deps, { schedule: schedule.name, answer: result, logFile }) : result;
+    return { result: said, topic: schedule.name };
   },
   "session.idle": async (event, deps) => {
     const { sessionId } = event.payload as { sessionId: string };

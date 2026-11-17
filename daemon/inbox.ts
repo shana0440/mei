@@ -89,6 +89,32 @@ export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
   );
 }
 
+export type Said =
+  | { minutesAgo: number; topic: string; message: string; reply: string }
+  | { minutesAgo: number; schedule: string; result: string };
+
+const saidLength = 1000;
+
+function cut(text: string): string {
+  return text.length > saidLength ? `${text.slice(0, saidLength)}…` : text;
+}
+
+export function recentlySaid(db: DatabaseSync, limit: number, now: number): Said[] {
+  return findEvents(
+    db,
+    `WHERE status = 'done' AND (type = 'user.message' OR (type = 'timer.fired' AND json_extract(payload, '$.notify')))
+     ORDER BY finished_at DESC LIMIT ?`,
+    limit,
+  )
+    .reverse()
+    .map(({ type, payload, topic, result, finishedAt }) => {
+      const minutesAgo = Math.round((now - (finishedAt ?? now)) / 60_000);
+      return type === "user.message"
+        ? { minutesAgo, topic: topic ?? "", message: cut((payload as { text: string }).text), reply: cut(result ?? "") }
+        : { minutesAgo, schedule: topic ?? "", result: cut(result ?? "") };
+    });
+}
+
 export function recentEvents(db: DatabaseSync, limit: number): InboxEvent[] {
   return findEvents(
     db,

@@ -76,7 +76,7 @@ When the daemon starts, it copies each of these files that is missing from `temp
 
 Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
-`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
+`state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer and a notified scheduled result, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
 
 ## Configuration
 
@@ -112,7 +112,7 @@ Each message goes through up to three runs:
 
 1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder until it closes; a session that continues a closed one gets a fresh pick.
 2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
-3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks, seeing the last two exchanges of the session. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks. It sees the last four things it said to you across all topics, chat answers and scheduled results alike, with how long ago each was, so it can tell when it is changing the subject. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
 
 Memory is written from the working agent's transcript, so it holds the original answers. The voice follows `CHARACTER.md` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
@@ -191,7 +191,9 @@ npm run -s listen | while read -r event; do
 done
 ```
 
-A schedule with `notify = false` is left out, which is how `dream` stays silent. Chat answers and session summaries are never sent.
+With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation. A failed run sends its error as is.
+
+A schedule with `notify = false` is left out and not voiced, which is how `dream` stays silent. Chat answers and session summaries are never sent.
 
 Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
 
