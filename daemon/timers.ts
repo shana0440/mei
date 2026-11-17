@@ -20,7 +20,7 @@ function findTimers(db: DatabaseSync, where: string, ...params: number[]): Timer
 }
 
 export function nextDue(spec: ScheduleSpec, now: number): number {
-  if ("every_minutes" in spec) return now + spec.every_minutes * 60_000;
+  if (spec.every_minutes !== undefined) return now + spec.every_minutes * 60_000;
   const [hours, minutes] = spec.daily_at.split(":").map(Number);
   const due = new Date(now);
   due.setHours(hours, minutes, 0, 0);
