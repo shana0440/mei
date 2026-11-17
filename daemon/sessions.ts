@@ -13,8 +13,6 @@ export type Session = {
 
 export type ClosedSession = { id: string; topic: string; closedAt: number; summary: string };
 
-export type Exchange = { message: string; reply: string };
-
 type Activity = { id: string; topic: string; role: string; folder: string; context: string; eventId: number };
 
 export function recordActivity(db: DatabaseSync, activity: Activity, now: number): void {
@@ -23,18 +21,6 @@ export function recordActivity(db: DatabaseSync, activity: Activity, now: number
     `INSERT INTO sessions (id, topic, role, folder, context, last_event_id, last_active_at) VALUES (?, ?, ?, ?, ?, ?, ?)
      ON CONFLICT (id) DO UPDATE SET last_event_id = excluded.last_event_id, last_active_at = excluded.last_active_at`,
   ).run(id, topic, role, folder, context, eventId, now);
-}
-
-export function recentExchanges(db: DatabaseSync, sessionId: string, limit: number): Exchange[] {
-  return (
-    db
-      .prepare(
-        `SELECT json_extract(payload, '$.text') AS message, result AS reply FROM events
-         WHERE session_id = ? AND type = 'user.message' AND status = 'done'
-         ORDER BY id DESC LIMIT ?`,
-      )
-      .all(sessionId, limit) as Exchange[]
-  ).reverse();
 }
 
 export function sessionsActiveSince(db: DatabaseSync, since: number): Session[] {
