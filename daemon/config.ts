@@ -5,8 +5,11 @@ import type { TomlTable, TomlValue } from "smol-toml";
 import { home } from "./paths.ts";
 
 export type ScheduleSpec = { daily_at: string } | { every_minutes: number };
-export type Job = { prompt: string; model: string } | { command: string; timeoutMinutes: number };
-export type Schedule = { name: string; notify: boolean; spec: ScheduleSpec } & Job;
+type Command = { command: string; timeoutMinutes: number };
+type Prompt = { prompt: string; model: string };
+export type Job = Command | Prompt | (Command & Prompt);
+export type ScheduledJob = { name: string; notify: boolean } & Job;
+export type Schedule = ScheduledJob & { spec: ScheduleSpec };
 
 const defaultTimeoutMinutes = 10;
 
@@ -55,20 +58,36 @@ function timeOfDay(from: Section, key: string): string {
   return value;
 }
 
-function job(from: Section): Job {
+function commandPart(from: Section): Command | undefined {
   const { label, table } = from;
-  if ("prompt" in table === "command" in table) throw new Error(`${label} needs exactly one of prompt or command`);
-  if ("command" in table) {
-    if ("model" in table) throw new Error(`${label} runs a command, which uses no model`);
-    return {
-      command: text(from, "command"),
-      timeoutMinutes: "timeout_minutes" in table ? positiveNumber(from, "timeout_minutes") : defaultTimeoutMinutes,
-    };
+  if (!("command" in table)) {
+    if ("timeout_minutes" in table) throw new Error(`${label}: timeout_minutes applies only to a command`);
+    return undefined;
   }
-  if ("timeout_minutes" in table) throw new Error(`${label}: timeout_minutes applies only to a command`);
+  return {
+    command: text(from, "command"),
+    timeoutMinutes: "timeout_minutes" in table ? positiveNumber(from, "timeout_minutes") : defaultTimeoutMinutes,
+  };
+}
+
+function promptPart(from: Section): Prompt | undefined {
+  const { label, table } = from;
+  if (!("prompt" in table)) {
+    if ("model" in table) throw new Error(`${label}: model applies only to a prompt`);
+    return undefined;
+  }
   const prompt = text(from, "prompt");
   if (!existsSync(join(home, prompt))) throw new Error(`${label}: the prompt file ${prompt} does not exist`);
   return { prompt, model: "model" in table ? text(from, "model") : "" };
+}
+
+function job(from: Section): Job {
+  const command = commandPart(from);
+  const prompt = promptPart(from);
+  if (command && prompt) return { ...command, ...prompt };
+  const only = command ?? prompt;
+  if (!only) throw new Error(`${from.label} needs a prompt, a command or both`);
+  return only;
 }
 
 function schedule(table: TomlTable, index: number): Schedule {

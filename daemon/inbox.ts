@@ -56,6 +56,10 @@ export function markDone(db: DatabaseSync, id: number, { result, sessionId, topi
   ).run(result, sessionId ?? null, topic ?? null, now, id);
 }
 
+export function queueForAgent(db: DatabaseSync, id: number, commandOutput: string): void {
+  db.prepare("UPDATE events SET status = 'pending', result = ?, attempts = 0 WHERE id = ?").run(commandOutput, id);
+}
+
 export function markFailed(db: DatabaseSync, id: number, error: string, now: number): void {
   db.prepare("UPDATE events SET status = 'failed', error = ?, finished_at = ? WHERE id = ?").run(error, now, id);
 }

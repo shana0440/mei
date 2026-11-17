@@ -1,8 +1,8 @@
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { Config, Schedule } from "./config.ts";
-import { getEvent, markDone, markFailed, markRunning, pendingEvents } from "./inbox.ts";
+import type { Config, ScheduledJob } from "./config.ts";
+import { getEvent, markDone, markFailed, markRunning, pendingEvents, queueForAgent } from "./inbox.ts";
 import type { InboxEvent, Outcome } from "./inbox.ts";
 import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
@@ -22,7 +22,7 @@ export type Deps = {
   onFinished: (event: InboxEvent) => void;
 };
 
-type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome>;
+type Handler = (event: InboxEvent, deps: Deps) => Promise<Outcome | { commandOutput: string }>;
 
 const handlers: Record<string, Handler | undefined> = {
   "user.message": async (event, deps) => {
@@ -54,20 +54,30 @@ const handlers: Record<string, Handler | undefined> = {
     return { result: voiced, sessionId, topic: `${topic} · ${role.name}` };
   },
   "timer.fired": async (event, deps) => {
-    const schedule = event.payload as Omit<Schedule, "spec">;
+    const schedule = event.payload as ScheduledJob;
     const startedAt = Date.now();
     const key = `watermark:${schedule.name}`;
     const watermark = Number(deps.db.prepare("SELECT value FROM kv WHERE key = ?").get(key)?.value ?? 0);
     const lastRun = watermark ? new Date(watermark).toISOString() : "never";
     const logFile = join(logsDir, `${event.id}.jsonl`);
+    let output = event.result;
+    if ("command" in schedule && output === null) {
+      output = await runScript({ ...schedule, env: { MEI_LAST_RUN: lastRun }, logFile });
+      if ("prompt" in schedule) return { commandOutput: output };
+    }
     const result =
-      "command" in schedule
-        ? await runScript({ ...schedule, env: { MEI_LAST_RUN: lastRun }, logFile })
-        : await runPrompt(deps, {
+      "prompt" in schedule
+        ? await runPrompt(deps, {
             ...schedule,
-            values: { now: new Date(startedAt).toLocaleString(), last_run: lastRun, sessions_dir: chatSessionsDir },
+            values: {
+              now: new Date(startedAt).toLocaleString(),
+              last_run: lastRun,
+              sessions_dir: chatSessionsDir,
+              ...(output === null ? {} : { output }),
+            },
             logFile,
-          });
+          })
+        : (output ?? "");
     deps.db.prepare(
       "INSERT INTO kv (key, value) VALUES (?, ?) ON CONFLICT (key) DO UPDATE SET value = excluded.value",
     ).run(key, String(startedAt));
@@ -109,16 +119,18 @@ async function handle(deps: Deps, event: InboxEvent): Promise<void> {
   try {
     const handler = handlers[event.type];
     if (!handler) throw new Error(`No handler for event type "${event.type}"`);
-    markDone(db, event.id, await handler(event, { ...deps }), Date.now());
+    const handled = await handler(event, { ...deps });
+    if ("commandOutput" in handled) return queueForAgent(db, event.id, handled.commandOutput);
+    markDone(db, event.id, handled, Date.now());
   } catch (error) {
     markFailed(db, event.id, (error as Error).message, Date.now());
   }
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
 
-function commandSchedule({ type, payload }: InboxEvent): string | undefined {
-  const schedule = payload as Omit<Schedule, "spec">;
-  return type === "timer.fired" && "command" in schedule ? schedule.name : undefined;
+function commandToRun({ type, payload, result }: InboxEvent): string | undefined {
+  const schedule = payload as ScheduledJob;
+  return type === "timer.fired" && "command" in schedule && result === null ? schedule.name : undefined;
 }
 
 export function startWorker(deps: Deps): () => void {
@@ -126,7 +138,7 @@ export function startWorker(deps: Deps): () => void {
   const runningCommands = new Set<string>();
   function work(): void {
     for (const event of pendingEvents(deps.db)) {
-      const command = commandSchedule(event);
+      const command = commandToRun(event);
       if (command !== undefined && !runningCommands.has(command)) {
         runningCommands.add(command);
         void handle(deps, event).finally(() => {

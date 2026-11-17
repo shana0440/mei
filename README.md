@@ -121,7 +121,7 @@ Memory is written from the working agent's transcript, so it holds the original 
 mei runs a prompt or a command on a schedule when `config.toml` has a block for it. The file ships one, the nightly `dream` schedule described below.
 
 ```toml
-# Each [[schedule]] needs a unique name, exactly one of prompt or command,
+# Each [[schedule]] needs a unique name, a prompt, a command or both,
 # and exactly one of daily_at or every_minutes.
 [[schedule]]
 name = "dream"
@@ -143,6 +143,18 @@ timeout_minutes = 5      # stop it, with everything it started, after this long;
 
 It runs as soon as it is due, without waiting for agent runs, and at most one run of each command schedule runs at a time. Its trimmed stdout is the result. A non-zero exit or the time limit fails the run with stderr as the error. `MEI_LAST_RUN` holds the same value as `{{last_run}}`. The log in `state/logs/` holds the exit status, stdout and stderr.
 
+A schedule with both runs the command first and hands its stdout to the prompt as `{{output}}`, so a script can fetch the data and the agent only judges it:
+
+```toml
+[[schedule]]
+name = "reddit-funniest"
+command = "scripts/reddit-top.sh"
+prompt = "prompts/reddit-funniest.md"   # "Pick the funniest of these posts: {{output}}"
+daily_at = "09:00"
+```
+
+The command runs as soon as it is due; the prompt then waits its turn with the other agent runs, and its answer is the result. A failed command fails the run without starting the agent. Until the prompt runs, `npm run status` shows the command's output for the run.
+
 Ask mei to schedule something and it writes the script or prompt, adds the block and reloads, following the `schedule` skill in the home.
 
 Every prompt run starts a fresh conversation that is not kept. A run that was due while the daemon was stopped happens once when the daemon starts.
@@ -154,6 +166,7 @@ A prompt file is plain text. mei replaces these placeholders before the run, and
 | `{{now}}` | the current local date and time |
 | `{{last_run}}` | when this schedule last ran successfully, as a UTC timestamp like `2026-01-31T19:00:00.000Z`, or `never` |
 | `{{sessions_dir}}` | the absolute path of the directory holding one `.jsonl` transcript per chat session |
+| `{{output}}` | the stdout of the schedule's command; only in a schedule that has one |
 
 ```sh
 npm run job -- dream            # run a schedule now

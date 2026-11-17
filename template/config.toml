@@ -24,11 +24,11 @@ model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
 
-# Each [[schedule]] runs a prompt file on its own, or a command without an
-# agent. It needs a unique name, exactly one of prompt (a file relative to this
-# directory) or command (run with sh -c here, stdout is the result, stopped
-# after timeout_minutes, default 10), and exactly one of daily_at or
-# every_minutes.
+# Each [[schedule]] runs a prompt file on its own, a command without an agent,
+# or both: the command's stdout goes to the prompt as {{output}}. It needs a
+# unique name, a prompt (a file relative to this directory), a command (run
+# with sh -c here, stopped after timeout_minutes, default 10) or both, and
+# exactly one of daily_at or every_minutes.
 [[schedule]]
 name = "dream"
 prompt = "prompts/dream.md"
