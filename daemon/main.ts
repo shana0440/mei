@@ -3,12 +3,14 @@ import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
+import type { Config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { chatSessionsDir, configPath, dbPath, home, logsDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
+import { changeSchedules } from "./schedules.ts";
 import { closedSessions } from "./sessions.ts";
 import { startServer } from "./server.ts";
 import { listTimers, syncSchedules } from "./timers.ts";
@@ -40,6 +42,23 @@ await runCommand(async () => {
   const wake = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
+
+  function apply(next: Config): void {
+    db.exec("BEGIN");
+    try {
+      syncSchedules(db, next.schedules, Date.now());
+      db.prepare("UPDATE timers SET due_at = due_at + ? WHERE kind = 'idle' AND status = 'active'").run(
+        (next.idle.afterMinutes - config.idle.afterMinutes) * 60_000,
+      );
+      db.exec("COMMIT");
+    } catch (error) {
+      db.exec("ROLLBACK");
+      throw error;
+    }
+    config = next;
+    deps.config = next;
+    rearm();
+  }
 
   await startServer(socketPath, {
     chat: async ({ text, debug }, send) => {
@@ -74,21 +93,7 @@ await runCommand(async () => {
       return {};
     },
     reload: () => {
-      const next = loadConfig(configPath);
-      db.exec("BEGIN");
-      try {
-        syncSchedules(db, next.schedules, Date.now());
-        db.prepare("UPDATE timers SET due_at = due_at + ? WHERE kind = 'idle' AND status = 'active'").run(
-          (next.idle.afterMinutes - config.idle.afterMinutes) * 60_000,
-        );
-        db.exec("COMMIT");
-      } catch (error) {
-        db.exec("ROLLBACK");
-        throw error;
-      }
-      config = next;
-      deps.config = next;
-      rearm();
+      apply(loadConfig(configPath));
       return {};
     },
     schedules: () => {
@@ -99,6 +104,10 @@ await runCommand(async () => {
           dueAt: timers.find((timer) => timer.kind === "schedule" && timer.name === schedule.name)?.dueAt ?? null,
         })),
       };
+    },
+    schedule: ({ change }) => {
+      apply(changeSchedules(change));
+      return {};
     },
     reset: () => {
       if (db.prepare("SELECT 1 FROM events WHERE status = 'running'").get()) {

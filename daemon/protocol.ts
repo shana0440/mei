@@ -1,5 +1,6 @@
 import type { Schedule } from "./config.ts";
 import type { InboxEvent } from "./inbox.ts";
+import type { ScheduleChange } from "./schedules.ts";
 import type { ClosedSession } from "./sessions.ts";
 import type { Timer } from "./timers.ts";
 
@@ -13,6 +14,7 @@ export type Requests = {
   listen: { message: { after?: number }; reply: {} };
   status: { message: {}; reply: { events: InboxEvent[]; timers: Timer[]; closed: ClosedSession[] } };
   schedules: { message: {}; reply: { schedules: ScheduleListing[] } };
+  schedule: { message: { change: ScheduleChange }; reply: {} };
 };
 
 export type RequestType = keyof Requests;

@@ -155,9 +155,13 @@ function within(tablePath: PropertyKey[], message: string, data: TomlTable): str
 }
 
 export function loadConfig(path: string): Config {
+  return parseConfig(readFileSync(path, "utf8"), path);
+}
+
+export function parseConfig(text: string, path: string): Config {
   let data: TomlTable;
   try {
-    data = parse(readFileSync(path, "utf8"));
+    data = parse(text);
   } catch (error) {
     throw new Error(`${path}: ${(error as Error).message}`);
   }

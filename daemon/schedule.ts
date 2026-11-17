@@ -2,7 +2,9 @@ import { request, runCommand } from "./client.ts";
 import type { ScheduleListing } from "./protocol.ts";
 
 const usage = `Usage:
-  mei schedule list`;
+  mei schedule list
+  mei schedule enable <name>
+  mei schedule disable <name>`;
 
 function when({ spec }: ScheduleListing): string {
   return spec.daily_at !== undefined ? `daily at ${spec.daily_at}` : `every ${spec.every_minutes} minutes`;
@@ -27,6 +29,12 @@ await runCommand(async () => {
   const [action, ...args] = process.argv.slice(2);
   if (action === "list" && args.length === 0) {
     list((await request({ type: "schedules" })).schedules);
+    return;
+  }
+  if ((action === "enable" || action === "disable") && args.length === 1) {
+    const [name] = args;
+    await request({ type: "schedule", change: { action, name } });
+    console.log(`${{ enable: "Enabled", disable: "Disabled" }[action]} schedule "${name}"`);
     return;
   }
   throw new Error(usage);

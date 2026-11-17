@@ -179,7 +179,13 @@ npm run status                  # also lists each schedule with its next run
 
 ```sh
 npm run schedule -- list                # every schedule: enabled or disabled, when it runs, its next run
+npm run schedule -- disable dream       # stop it firing; its block stays in config.toml
+npm run schedule -- enable dream
 ```
+
+`enable` and `disable` change the block in `config.toml` and apply it to the running daemon, the same as editing the file and running `mei reload`. An unknown name is reported, and an invalid `config.toml` is reported and left unchanged.
+
+A disabled schedule has `enabled = false` in its block. It never fires on its own, and runs it missed while disabled are not made up, but `npm run job -- <name>` still runs it. Enabling it again schedules its next run from then.
 
 ### Dream
 
@@ -218,7 +224,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
-| `npm run schedule -- list` | [list schedules](#managing-schedules) |
+| `npm run schedule -- <list\|enable\|disable>` | [manage schedules](#managing-schedules) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
