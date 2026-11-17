@@ -119,7 +119,7 @@ done
 
 A schedule with `notify = false` is left out, which is how `dream` stays silent. Chat answers and session summaries are never sent.
 
-Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command exits when the daemon stops.
+Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
 
 To subscribe from your own program, connect to the Unix socket `state/mei.sock` and send one line, `{"type":"listen"}` or `{"type":"listen","after":12}`. The daemon sends one JSON line per result until you close the connection.
 
