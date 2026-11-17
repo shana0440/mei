@@ -20,7 +20,7 @@ const recentlyClosed = 7 * 24 * 60 * 60_000;
 
 await runCommand(async () => {
   cpSync(templateDir, home, { recursive: true, force: false });
-  const config = loadConfig(configPath);
+  let config = loadConfig(configPath);
   mkdirSync(logsDir, { recursive: true });
   const db = openDb(dbPath);
   const progress = new EventEmitter();
@@ -70,6 +70,24 @@ await runCommand(async () => {
       publish();
       await closed;
       progress.off("finished", publish);
+      return {};
+    },
+    reload: () => {
+      const next = loadConfig(configPath);
+      db.exec("BEGIN");
+      try {
+        syncSchedules(db, next.schedules, Date.now());
+        db.prepare("UPDATE timers SET due_at = due_at + ? WHERE kind = 'idle' AND status = 'active'").run(
+          (next.idle.afterMinutes - config.idle.afterMinutes) * 60_000,
+        );
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+      config = next;
+      deps.config = next;
+      rearm();
       return {};
     },
     reset: () => {

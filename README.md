@@ -80,7 +80,11 @@ Edit `CHARACTER.md` to change the assistant's identity and communication prefere
 
 ## Configuration
 
-`config.toml` in the home holds the settings. Restart the daemon after changing it.
+`config.toml` in the home holds the settings. After editing it, run `mei reload` (or `npm run reload`) to apply changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
+
+Reload updates roles, models, character settings, idle timeouts and schedules. Unchanged schedule times are preserved; changed intervals start from the reload time. Active idle timers are adjusted to the new timeout. Work already running finishes with its original settings; queued work uses the new settings. Already queued scheduled runs keep their original schedule payload.
+
+`AGENTS.md`, `CHARACTER.md`, `PROJECTS.md`, skills and prompt files are read on each relevant agent run, so edits need no restart or reload. A running agent is not interrupted, and reload does not clear session history or memory. Changes to `MEI_HOME`, the service environment or daemon code still require a restart.
 
 ```toml
 [roles.chat]                 # one block per role; add as many as you like
@@ -173,6 +177,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run daemon` | start the daemon in the foreground |
 | `npm run chat -- "<prompt>"` | send a message and print the answer |
 | `npm run status` | list schedules, closed sessions and recent messages |
+| `npm run reload` | apply configuration changes without restarting |
 | `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
@@ -183,6 +188,7 @@ To keep the daemon running whenever you are logged in, and to chat from any dire
 make install                    # with Nix: nix-shell --run "make install"
 mei chat "hi"
 mei status
+mei reload                     # apply changes to config.toml
 mei reset --yes                 # permanently clear memory, history, logs and inbox
 journalctl --user -u mei        # what the daemon printed
 ```
