@@ -33,7 +33,9 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
 
 export function addEvent(db: DatabaseSync, { type, payload }: NewEvent, now: number): number {
   const { lastInsertRowid } = db
-    .prepare("INSERT INTO events (type, payload, status, created_at) VALUES (?, ?, 'pending', ?)")
+    .prepare(`INSERT INTO events (id, type, payload, status, created_at)
+      SELECT COALESCE(MAX(id), (SELECT CAST(value AS INTEGER) FROM kv WHERE key = 'eventId'), 0) + 1,
+        ?, ?, 'pending', ? FROM events`)
     .run(type, JSON.stringify(payload), now);
   return Number(lastInsertRowid);
 }

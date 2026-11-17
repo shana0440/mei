@@ -1,11 +1,12 @@
 import { EventEmitter, once } from "node:events";
-import { cpSync, mkdirSync } from "node:fs";
+import { cpSync, mkdirSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
 import { openDb } from "./db.ts";
 import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
-import { configPath, dbPath, home, logsDir, socketPath, templateDir } from "./paths.ts";
+import { chatSessionsDir, configPath, dbPath, home, logsDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { closedSessions } from "./sessions.ts";
@@ -69,6 +70,34 @@ await runCommand(async () => {
       publish();
       await closed;
       progress.off("finished", publish);
+      return {};
+    },
+    reset: () => {
+      if (db.prepare("SELECT 1 FROM events WHERE status = 'running'").get()) {
+        throw new Error("mei is working. Wait for it to finish, then try resetting again.");
+      }
+      const pending = recentEvents(db, 0);
+      const lastId = Number(db.prepare("SELECT MAX(id) AS id FROM events").get()?.id ??
+        db.prepare("SELECT value FROM kv WHERE key = 'eventId'").get()?.value ?? 0);
+      for (const path of [join(home, "memory"), join(home, "state", "sessions"), logsDir]) {
+        rmSync(path, { recursive: true, force: true });
+        mkdirSync(path, { recursive: true });
+      }
+      mkdirSync(chatSessionsDir, { recursive: true });
+      db.exec("BEGIN");
+      try {
+        db.exec("DELETE FROM events; DELETE FROM sessions; DELETE FROM timers; DELETE FROM kv");
+        db.prepare("INSERT INTO kv (key, value) VALUES ('eventId', ?)").run(String(lastId));
+        syncSchedules(db, config.schedules, Date.now());
+        db.exec("COMMIT");
+      } catch (error) {
+        db.exec("ROLLBACK");
+        throw error;
+      }
+      for (const event of pending) {
+        progress.emit(`finished:${event.id}`, { ...event, error: "Cleared by memory reset" });
+      }
+      rearm();
       return {};
     },
     status: () => ({

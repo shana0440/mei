@@ -34,7 +34,7 @@ process.on("SIGINT", () => {
 
 await runCommand(async () => {
   const { values, positionals } = parseArgs({ allowPositionals: true, options: { debug: { type: "boolean" } } });
-  if (positionals.length !== 1) throw new Error('Usage: npm run chat -- [--debug] "<prompt>"');
+  if (positionals.length !== 1) throw new Error('Usage: mei chat [--debug] "<prompt>" (or npm run chat -- [--debug] "<prompt>")');
   const { result, topic } = await request({ type: "chat", text: positionals[0], debug: values.debug }, (line) =>
     process.stderr.write(render(line as DebugLine)),
   );

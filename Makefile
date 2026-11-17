@@ -20,7 +20,7 @@ endef
 
 define COMMAND_FILE
 #!/bin/sh
-exec $(NODE) $(CURDIR)/daemon/chat.ts "$$@"
+exec "$(NODE)" "$(CURDIR)/daemon/cli.ts" "$$@"
 endef
 
 export SERVICE_FILE

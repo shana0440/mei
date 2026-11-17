@@ -53,6 +53,10 @@ The instructions for writing a session into memory are in `prompts/summarize.md`
 
 The topic and the debug output go to stderr, so `npm run -s chat -- "hi" 2>/dev/null` prints the answer alone. Ctrl-C stops waiting; the message is still answered, and `npm run status` shows the result.
 
+## Reset memory
+
+With the daemon running, use `npm run reset -- --yes` to permanently clear memory, chat transcripts, session summaries, logs and the inbox. There is no undo. Settings, instructions, projects, skills and prompts are kept; schedules start fresh. If mei is working, wait for it to finish before resetting.
+
 ## Home
 
 Everything that belongs to your mei is in one directory, `~/.local/share/mei`. Set `MEI_HOME` to keep it somewhere else.
@@ -150,6 +154,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run daemon` | start the daemon in the foreground |
 | `npm run chat -- "<prompt>"` | send a message and print the answer |
 | `npm run status` | list schedules, closed sessions and recent messages |
+| `npm run reset -- --yes` | permanently clear memory, history, logs and the inbox |
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 
@@ -157,11 +162,15 @@ To keep the daemon running whenever you are logged in, and to chat from any dire
 
 ```sh
 make install                    # with Nix: nix-shell --run "make install"
-mei "hi"
+mei chat "hi"
+mei status
+mei reset --yes                 # permanently clear memory, history, logs and inbox
 journalctl --user -u mei        # what the daemon printed
 ```
 
 `make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
+
+The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>` and `mei listen [--after <event number>]` are also available. Run `mei --help` for usage.
 
 `make uninstall` stops the service and removes both files.
 
