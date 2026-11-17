@@ -35,9 +35,9 @@ await runCommand(async () => {
       progress.emit("finished");
     },
   };
-  const wake = startWorker(deps);
   recoverRunning(db, maxAttempts, Date.now());
   syncSchedules(db, config.schedules, Date.now());
+  const wake = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
 

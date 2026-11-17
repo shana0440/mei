@@ -36,6 +36,13 @@ const migrations = [
   "CREATE TABLE kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
   "ALTER TABLE sessions ADD COLUMN role TEXT NOT NULL DEFAULT ''",
   "ALTER TABLE sessions ADD COLUMN folder TEXT NOT NULL DEFAULT ''",
+  `ALTER TABLE events ADD COLUMN step TEXT NOT NULL DEFAULT 'agent';
+   ALTER TABLE events ADD COLUMN handoff TEXT;
+   UPDATE events SET handoff = result, result = NULL WHERE status IN ('pending', 'running');
+   UPDATE events SET step = 'command'
+   WHERE status IN ('pending', 'running') AND handoff IS NULL
+     AND type = 'timer.fired' AND json_extract(payload, '$.command') IS NOT NULL;
+   DELETE FROM kv WHERE key LIKE 'watermark:%'`,
 ];
 
 export function openDb(path: string): DatabaseSync {

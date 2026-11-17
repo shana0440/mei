@@ -27,7 +27,7 @@ export function sessionsActiveSince(db: DatabaseSync, since: number): Session[] 
   return db
     .prepare(
       `SELECT sessions.id, sessions.topic, role, folder, context, last_active_at AS lastActiveAt,
-         json_extract(events.payload, '$.text') AS lastMessage, events.result AS lastReply
+         json_extract(events.payload, '$.text') AS lastMessage, COALESCE(events.result, events.handoff) AS lastReply
        FROM sessions JOIN events ON events.id = sessions.last_event_id
        WHERE last_active_at >= ?
        ORDER BY last_active_at DESC`,
