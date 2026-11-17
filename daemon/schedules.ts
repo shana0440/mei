@@ -4,7 +4,7 @@ import { parseConfig } from "./config.ts";
 import type { Config, Schedule } from "./config.ts";
 import { configPath } from "./paths.ts";
 
-export type ScheduleChange = { action: "enable" | "disable"; name: string };
+export type ScheduleChange = { action: "remove" | "enable" | "disable"; name: string };
 
 const tableHeader = /^\[\[?[\w.\-"]+\]\]?\s*(#.*)?$/;
 const keyLine = /^\s*[\w-]+\s*=/;
@@ -24,6 +24,14 @@ function scheduleBlock(lines: string[], name: string): Block {
   throw new Error(`config.toml has no [[schedule]] block named "${name}"; edit it by hand`);
 }
 
+function withScheduleRemoved(text: string, name: string): string {
+  const lines = text.split("\n");
+  const { start, end } = scheduleBlock(lines, name);
+  const blankAfter = lines[end]?.trim() === "" && end < lines.length - 1 ? 1 : 0;
+  lines.splice(start, end - start + blankAfter);
+  return lines.join("\n");
+}
+
 function withScheduleEnabled(text: string, name: string, enabled: boolean): string {
   const lines = text.split("\n");
   const { start, end } = scheduleBlock(lines, name);
@@ -39,6 +47,8 @@ function withoutSchedule(config: Config, name: string): string {
 
 function edit(text: string, change: ScheduleChange): { text: string; expected: (schedule?: Schedule) => boolean } {
   switch (change.action) {
+    case "remove":
+      return { text: withScheduleRemoved(text, change.name), expected: (schedule) => schedule === undefined };
     case "enable":
     case "disable": {
       const enabled = change.action === "enable";

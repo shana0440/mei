@@ -3,6 +3,7 @@ import type { ScheduleListing } from "./protocol.ts";
 
 const usage = `Usage:
   mei schedule list
+  mei schedule remove <name>
   mei schedule enable <name>
   mei schedule disable <name>`;
 
@@ -31,10 +32,10 @@ await runCommand(async () => {
     list((await request({ type: "schedules" })).schedules);
     return;
   }
-  if ((action === "enable" || action === "disable") && args.length === 1) {
+  if ((action === "remove" || action === "enable" || action === "disable") && args.length === 1) {
     const [name] = args;
     await request({ type: "schedule", change: { action, name } });
-    console.log(`${{ enable: "Enabled", disable: "Disabled" }[action]} schedule "${name}"`);
+    console.log(`${{ remove: "Removed", enable: "Enabled", disable: "Disabled" }[action]} schedule "${name}"`);
     return;
   }
   throw new Error(usage);

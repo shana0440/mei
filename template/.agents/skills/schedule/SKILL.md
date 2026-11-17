@@ -30,4 +30,4 @@ mei's home is three levels up from this file's directory. Paths below are relati
 5. Run `mei job <name>`. A command runs right away: check its result with `mei status`. A prompt, including the prompt half of a schedule with both, runs after your answer, since agent runs go one at a time.
 6. Show the user the block, the role you picked and why, and the result of the test run, or of your own run of the script and prompt.
 
-To change a schedule, edit its block and reload. `mei schedule list` shows every schedule. `mei schedule disable <name>` stops one firing and keeps its block; `mei schedule enable <name>` resumes it. To remove one, delete its block, reload, and delete its script or prompt.
+To change a schedule, edit its block and reload. `mei schedule list` shows every schedule. `mei schedule disable <name>` stops one firing and keeps its block; `mei schedule enable <name>` resumes it. To remove one, run `mei schedule remove <name>` and delete its script or prompt.
