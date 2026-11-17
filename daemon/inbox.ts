@@ -70,6 +70,19 @@ export function getEvent(db: DatabaseSync, id: number): InboxEvent | undefined {
   return findEvents(db, "WHERE id = ?", id)[0];
 }
 
+export function lastFinishedId(db: DatabaseSync): number {
+  return Number(db.prepare("SELECT MAX(id) AS id FROM events WHERE status IN ('done', 'failed')").get()?.id ?? 0);
+}
+
+export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
+  return findEvents(
+    db,
+    `WHERE id > ? AND status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
+     ORDER BY id`,
+    id,
+  );
+}
+
 export function recentEvents(db: DatabaseSync, limit: number): InboxEvent[] {
   return findEvents(
     db,

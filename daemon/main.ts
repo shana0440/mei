@@ -3,7 +3,7 @@ import { mkdirSync } from "node:fs";
 import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
 import { openDb } from "./db.ts";
-import { addEvent, recentEvents, recoverRunning } from "./inbox.ts";
+import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
 import { configPath, dbPath, logsDir, socketPath } from "./paths.ts";
 import { run } from "./runner.ts";
@@ -28,7 +28,10 @@ await runCommand(async () => {
     run,
     rearm: () => rearm(),
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
-    onFinished: (event) => progress.emit(`finished:${event.id}`, event),
+    onFinished: (event) => {
+      progress.emit(`finished:${event.id}`, event);
+      progress.emit("finished");
+    },
   };
   const wake = startWorker(deps);
   recoverRunning(db, maxAttempts, Date.now());
@@ -52,6 +55,20 @@ await runCommand(async () => {
       const eventId = addEvent(db, { type: "timer.fired", payload: timer.payload }, Date.now());
       wake();
       return { eventId };
+    },
+    listen: async ({ after }, send, closed) => {
+      let cursor = after ?? lastFinishedId(db);
+      const publish = () => {
+        for (const event of publishedAfter(db, cursor)) {
+          send(event);
+          cursor = event.id;
+        }
+      };
+      progress.on("finished", publish);
+      publish();
+      await closed;
+      progress.off("finished", publish);
+      return {};
     },
     status: () => ({
       events: recentEvents(db, 10),
