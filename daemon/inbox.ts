@@ -138,17 +138,21 @@ export function getEvent(db: DatabaseSync, id: number): InboxEvent | undefined {
 }
 
 export function lastFinishedId(db: DatabaseSync): number {
-  return Number(db.prepare("SELECT MAX(id) AS id FROM events WHERE status IN ('done', 'failed')").get()?.id ?? 0);
+  const last = db
+    .prepare("SELECT id FROM events WHERE status IN ('done', 'failed') ORDER BY finished_at DESC, id DESC LIMIT 1")
+    .get();
+  return Number(last?.id ?? 0);
 }
 
 export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
   return findEvents(
     db,
-    `WHERE id > ? AND (
+    `WHERE (finished_at, id) > (COALESCE((SELECT finished_at FROM events WHERE id = ?), 0), ?) AND (
        status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
        OR status = 'failed' AND type = 'dream'
      )
-     ORDER BY id`,
+     ORDER BY finished_at, id`,
+    id,
     id,
   );
 }
