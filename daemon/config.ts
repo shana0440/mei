@@ -76,7 +76,7 @@ function scheduledJob(schedule: ScheduleTable, models: Map<string, string>, defa
 const configTables = table({
   roles: z.record(z.string(), role, { error: "must be written as [roles.<name>]" }),
   router: table({ model: text, default_role: text }),
-  character: table({ enabled: flag, model: text }),
+  character: table({ name: text, enabled: flag, model: text }),
   idle: table({ after_minutes: positiveNumber, model: text }),
   schedule: z.array(scheduleTable, { error: "must be written as [[schedule]]" }).default([]),
 });

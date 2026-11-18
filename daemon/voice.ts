@@ -27,7 +27,7 @@ export async function voice({ db, config, run }: Deps, voicing: Voicing): Promis
     model: config.character.model,
     tools: false,
     contextFiles: false,
-    appendSystemPrompt: readFileSync(characterPath, "utf8"),
+    appendSystemPrompt: `Your name is ${config.character.name}.\n\n${readFileSync(characterPath, "utf8")}`,
   });
   const voiced = ok && response.trim() ? response : answer;
   appendFileSync(logFile, `${JSON.stringify({ type: "mei_voice", original: answer, voiced, error })}\n`);

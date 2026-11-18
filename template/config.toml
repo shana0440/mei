@@ -17,6 +17,7 @@ model = "anthropic/claude-haiku-5-5"   # model that decides which session a mess
 default_role = "chat"    # role used when the router fails or picks no known role
 
 [character]
+name = "Mei"             # the name the voice answers as
 enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
 model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
