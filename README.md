@@ -139,6 +139,18 @@ Summaries are written from the working agent's transcript, so memory holds the o
 
 At `[dream] daily_at`, 03:00 by default, dream writes the summaries waiting in short-term memory into the notes and task files in `memory/`, and updates `memory/MEMORY.md`. When it succeeds, those summaries leave short-term memory; summaries written during the run wait for the next one. A failed run keeps them for the next night. With no summaries waiting, it does not run. `npm run status` shows how many are waiting, and `npm run dream` runs it now. Its instructions are in `prompts/dream.md` in the home.
 
+`memory/` is a git repository, so a bad dream can be undone. Before each run dream commits what you and the chat sessions changed since the last one, as `Before dream <event number>`, and after a successful run it commits what the run changed, as `Dream <event number>`. A run with no summaries waiting commits nothing. If the backup fails, the run fails without changing memory. To see what a run did and to undo it:
+
+```sh
+cd ~/.local/share/mei/memory
+git log --stat                       # the commits, newest first
+git show <commit>                    # what one of them changed
+git restore --source=<commit> --staged --worktree .   # put memory back as it was at that commit
+git commit -m "Restore <commit>"
+```
+
+The history is kept in full and is cleared with the rest of memory by `npm run reset -- --yes`.
+
 ## Schedules
 
 mei runs a prompt or a command on a schedule when `config.toml` has a block for it.

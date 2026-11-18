@@ -7,7 +7,7 @@ import type { Config } from "./config.ts";
 import { openDb } from "./db.ts";
 import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
 import type { InboxEvent } from "./inbox.ts";
-import { chatSessionsDir, configPath, dbPath, home, logsDir, notebooksDir, socketPath, templateDir } from "./paths.ts";
+import { chatSessionsDir, configPath, dbPath, home, logsDir, memoryDir, notebooksDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
@@ -121,7 +121,7 @@ await runCommand(async () => {
       const pending = recentEvents(db, 0);
       const lastId = Number(db.prepare("SELECT MAX(id) AS id FROM events").get()?.id ??
         db.prepare("SELECT value FROM kv WHERE key = 'eventId'").get()?.value ?? 0);
-      for (const path of [join(home, "memory"), notebooksDir, join(home, "state", "sessions"), logsDir]) {
+      for (const path of [memoryDir, notebooksDir, join(home, "state", "sessions"), logsDir]) {
         rmSync(path, { recursive: true, force: true });
         mkdirSync(path, { recursive: true });
       }
