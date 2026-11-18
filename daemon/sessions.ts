@@ -60,7 +60,7 @@ export function shortTermMemory(db: DatabaseSync): SummarizedSession[] {
 
 export function describeSummaries(sessions: SummarizedSession[]): string {
   return sessions
-    .map(({ topic, closedAt, summary }) => `### ${topic} (closed ${new Date(closedAt).toLocaleString()})\n\n${summary}`)
+    .map(({ topic, closedAt, summary }) => `### ${topic} (${new Date(closedAt).toLocaleString()})\n\n${summary}`)
     .join("\n\n");
 }
 

@@ -61,11 +61,11 @@ function contextFor(continued: Session | undefined, summaries: SummarizedSession
   const parts = [
     continued &&
       (continued.summary
-        ? `This session continues the closed session "${continued.topic}". Where it stood:\n\n${continued.summary}`
-        : `This session continues the earlier session "${continued.topic}".`),
-    others.length > 0 && `Other closed sessions not yet in long-term memory, newest first:\n\n${describeSummaries(others)}`,
+        ? `This conversation continues "${continued.topic}". Where it stood:\n\n${continued.summary}`
+        : `This conversation continues "${continued.topic}".`),
+    others.length > 0 && `Other recent work, newest first:\n\n${describeSummaries(others)}`,
   ].filter(Boolean);
-  return parts.length > 0 ? ["## Short-term memory", ...parts].join("\n\n") : "";
+  return parts.length > 0 ? ["## Recent work", ...parts].join("\n\n") : "";
 }
 
 export async function route({ db, config, run }: Deps, text: string): Promise<Route> {
