@@ -1,2 +1,4 @@
 /.agents/
+/.direnv/
+/.home/
 node_modules/
