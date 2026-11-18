@@ -10,7 +10,8 @@
     "chat": "node daemon/chat.ts",
     "job": "node daemon/job.ts",
     "listen": "node daemon/listen.ts",
-    "schedule": "node daemon/schedule.ts"
+    "schedule": "node daemon/schedule.ts",
+    "config": "node daemon/configure.ts"
   },
   "dependencies": {
     "smol-toml": "^1.9.1",

@@ -80,7 +80,17 @@ Edit `CHARACTER.md` to change the assistant's communication preferences. To keep
 
 ## Configuration
 
-`config.toml` in the home holds the settings. After editing it, run `mei reload` (or `npm run reload`) to apply changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
+`config.toml` in the home holds the settings. Change them with `mei config`:
+
+```sh
+mei config                                    # open config.toml in $VISUAL or $EDITOR
+mei config get character.file                 # print one value, as <table>.<key>
+mei config set character.file characters/pirate.md
+```
+
+Both `mei config` and `set` check the result the same way the daemon does before saving it, and reload the daemon if it is running. When the check fails, `mei config` offers to reopen your draft, and `set` changes nothing. `set` keeps the rest of the file and its comments as they are; a value is read as TOML when it is one (`true`, `45`, `"quoted"`) and as text otherwise. Schedules are changed with `mei schedule` or in the editor. `mei config` also works while the daemon is stopped, which is how to fix a config that keeps it from starting.
+
+If you edit `config.toml` yourself, run `mei reload` (or `npm run reload`) to apply the changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
 
 Reload updates roles, models, character settings, idle timeouts and schedules. Unchanged schedule times are preserved; changed intervals start from the reload time. Active idle timers are adjusted to the new timeout. Work already running finishes with its original settings; queued work uses the new settings. Already queued scheduled runs keep their original schedule payload.
 
@@ -219,7 +229,7 @@ To subscribe from your own program, connect to the Unix socket `state/mei.sock` 
 
 ## Running
 
-The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing works while it is stopped.
+The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing but `config` works while it is stopped.
 
 | Command | What it does |
 |---|---|
@@ -231,6 +241,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 | `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
+| `npm run config -- [get <key> \| set <key> <value>]` | [change settings](#configuration) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 

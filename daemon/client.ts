@@ -2,6 +2,12 @@ import { connect } from "node:net";
 import { socketPath } from "./paths.ts";
 import type { Message, Reply, RequestType } from "./protocol.ts";
 
+export class DaemonNotRunning extends Error {
+  constructor() {
+    super("The mei daemon is not running. Start it with: npm run daemon");
+  }
+}
+
 export function stream<T extends RequestType>(message: Message<T>, onLine: (line: string) => void): Promise<void> {
   return new Promise((resolve, reject) => {
     const connection = connect(socketPath);
@@ -10,7 +16,7 @@ export function stream<T extends RequestType>(message: Message<T>, onLine: (line
     connection.on("connect", () => connection.write(`${JSON.stringify(message)}\n`));
     connection.on("error", (error: NodeJS.ErrnoException) => {
       const notRunning = error.code === "ENOENT" || error.code === "ECONNREFUSED";
-      reject(notRunning ? new Error("The mei daemon is not running. Start it with: npm run daemon") : error);
+      reject(notRunning ? new DaemonNotRunning() : error);
     });
     connection.on("data", (chunk: string) => {
       const lines = (received + chunk).split("\n");
