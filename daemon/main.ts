@@ -11,14 +11,13 @@ import { chatSessionsDir, configPath, dbPath, home, logsDir, socketPath, templat
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
-import { closedSessions } from "./sessions.ts";
+import { shortTermMemory } from "./sessions.ts";
 import { startServer } from "./server.ts";
 import { listTimers, syncSchedules } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
 const maxAttempts = 3;
-const recentlyClosed = 7 * 24 * 60 * 60_000;
 
 await runCommand(async () => {
   cpSync(templateDir, home, { recursive: true, force: false });
@@ -140,7 +139,7 @@ await runCommand(async () => {
     status: () => ({
       events: recentEvents(db, 10),
       timers: listTimers(db),
-      closed: closedSessions(db, Date.now() - recentlyClosed),
+      shortTerm: shortTermMemory(db),
     }),
   });
 

@@ -23,8 +23,8 @@ enabled = true           # rewrite each answer in the voice of the character fil
 model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
 [idle]
-after_minutes = 30       # a session this quiet is closed and written into memory; a later message starts a new session
-model = "anthropic/claude-haiku-5-5"   # model that writes a closed session into memory
+after_minutes = 30       # a session this quiet is closed and summarized; a later message starts a new session
+model = "anthropic/claude-haiku-5-5"   # model that summarizes a closed session
 
 # Each [[schedule]] runs a prompt file on its own, a command without an agent,
 # or both: the command's stdout goes to the prompt as {{output}}. It needs a

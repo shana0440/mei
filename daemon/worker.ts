@@ -20,7 +20,7 @@ import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import { runScript } from "./script.ts";
 import type { run } from "./runner.ts";
-import { recordActivity, saveSummary } from "./sessions.ts";
+import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 import { voice } from "./voice.ts";
 
@@ -141,17 +141,21 @@ const agentWorkByType: Record<string, Work | undefined> = {
   "timer.fired": async (event, deps) => {
     const job = event.payload as PromptJob;
     const output = event.handoff;
+    const prompt = readFileSync(join(home, job.prompt), "utf8");
+    const consumed = prompt.includes("{{short_term_memory}}") ? shortTermMemory(deps.db) : [];
     const { ok, response, error } = await deps.run({
-      prompt: fillPrompt(readFileSync(join(home, job.prompt), "utf8"), {
+      prompt: fillPrompt(prompt, {
         now: new Date().toLocaleString(),
         last_run: lastRunText(deps.db, job),
         sessions_dir: chatSessionsDir,
+        short_term_memory: describeSummaries(consumed) || "none",
         ...(output === null ? {} : { output }),
       }),
       model: job.model,
       logFile: logFileOf(event),
     });
     if (!ok) throw new Error(error);
+    forgetSummaries(deps.db, consumed);
     return { output: response, topic: job.name };
   },
   "session.idle": async (event, deps) => {

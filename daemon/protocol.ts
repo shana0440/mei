@@ -1,7 +1,7 @@
 import type { Schedule } from "./config.ts";
 import type { InboxEvent } from "./inbox.ts";
 import type { ScheduleChange } from "./schedules.ts";
-import type { ClosedSession } from "./sessions.ts";
+import type { SummarizedSession } from "./sessions.ts";
 import type { Timer } from "./timers.ts";
 
 export type ScheduleListing = Schedule & { dueAt: number | null };
@@ -12,7 +12,7 @@ export type Requests = {
   reset: { message: {}; reply: {} };
   reload: { message: {}; reply: {} };
   listen: { message: { after?: number }; reply: {} };
-  status: { message: {}; reply: { events: InboxEvent[]; timers: Timer[]; closed: ClosedSession[] } };
+  status: { message: {}; reply: { events: InboxEvent[]; timers: Timer[]; shortTerm: SummarizedSession[] } };
   schedules: { message: {}; reply: { schedules: ScheduleListing[] } };
   schedule: { message: { change: ScheduleChange }; reply: {} };
 };

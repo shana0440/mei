@@ -49,6 +49,9 @@ const migrations = [
     }
     db.exec("DELETE FROM kv WHERE key LIKE 'watermark:%'");
   },
+  function forgetSummariesAlreadyInLongTermMemory(db: DatabaseSync) {
+    db.exec("UPDATE sessions SET summary = NULL");
+  },
 ];
 
 export function openDb(path: string): DatabaseSync {
