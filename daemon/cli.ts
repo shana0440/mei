@@ -6,6 +6,7 @@ const usage = `Usage:
   mei reload
   mei reset --yes
   mei job <schedule name>
+  mei dream
   mei listen [--after <event number>]
   mei schedule list|add|remove|enable|disable ...
   mei config [get <key> | set <key> <value>]
@@ -20,10 +21,10 @@ await runCommand(async () => {
     console.log(usage);
     return;
   }
-  if (!["chat", "status", "reload", "reset", "job", "listen", "schedule", "config"].includes(command)) {
+  if (!["chat", "status", "reload", "reset", "job", "dream", "listen", "schedule", "config"].includes(command)) {
     throw new Error(`Unknown command "${command}"\n\n${usage}`);
   }
-  if (command === "status" && process.argv.length > 3) throw new Error("Usage: mei status");
+  if ((command === "status" || command === "dream") && process.argv.length > 3) throw new Error(`Usage: mei ${command}`);
   process.argv.splice(2, 1);
   await import(`./${modules[command] ?? command}.ts`);
 });

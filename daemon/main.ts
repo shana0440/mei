@@ -13,7 +13,7 @@ import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
 import { shortTermMemory } from "./sessions.ts";
 import { startServer } from "./server.ts";
-import { listTimers, syncSchedules } from "./timers.ts";
+import { listTimers, queueDream, syncTimers } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
@@ -37,7 +37,7 @@ await runCommand(async () => {
     },
   };
   recoverRunning(db, maxAttempts, Date.now());
-  syncSchedules(db, config.schedules, Date.now());
+  syncTimers(db, config, Date.now());
   const wake = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
@@ -45,7 +45,7 @@ await runCommand(async () => {
   function apply(next: Config): void {
     db.exec("BEGIN");
     try {
-      syncSchedules(db, next.schedules, Date.now());
+      syncTimers(db, next, Date.now());
       db.prepare("UPDATE timers SET due_at = due_at + ? WHERE kind = 'idle' AND status = 'active'").run(
         (next.idle.afterMinutes - config.idle.afterMinutes) * 60_000,
       );
@@ -68,6 +68,12 @@ await runCommand(async () => {
       progress.removeAllListeners(`line:${id}`);
       if (event.error !== null) throw new Error(event.error);
       return { result: event.result ?? "", topic: event.topic ?? "" };
+    },
+    dream: () => {
+      const eventId = queueDream(db, Date.now());
+      if (eventId === undefined) throw new Error("No summaries are waiting for dream");
+      wake();
+      return { eventId };
     },
     job: ({ name }) => {
       const schedule = config.schedules.find((candidate) => candidate.name === name);
@@ -124,7 +130,7 @@ await runCommand(async () => {
       try {
         db.exec("DELETE FROM events; DELETE FROM sessions; DELETE FROM timers; DELETE FROM kv");
         db.prepare("INSERT INTO kv (key, value) VALUES ('eventId', ?)").run(String(lastId));
-        syncSchedules(db, config.schedules, Date.now());
+        syncTimers(db, config, Date.now());
         db.exec("COMMIT");
       } catch (error) {
         db.exec("ROLLBACK");

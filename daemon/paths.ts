@@ -9,6 +9,7 @@ export const configPath = join(home, "config.toml");
 export const projectsPath = join(home, "PROJECTS.md");
 export const routePromptPath = join(root, "prompts", "route.md");
 export const summarizePromptPath = join(home, "prompts", "summarize.md");
+export const dreamPromptPath = join(home, "prompts", "dream.md");
 
 const stateDir = join(home, "state");
 export const dbPath = join(stateDir, "mei.db");

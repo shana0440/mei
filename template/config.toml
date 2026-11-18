@@ -26,15 +26,13 @@ model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 after_minutes = 30       # a session this quiet is closed and summarized; a later message starts a new session
 model = "anthropic/claude-haiku-5-5"   # model that summarizes a closed session
 
+[dream]
+daily_at = "03:00"       # local time HH:MM when the day's summaries are written into memory/
+model = "anthropic/claude-haiku-5-5"   # model that writes them
+
 # Each [[schedule]] runs a prompt file on its own, a command without an agent,
 # or both: the command's stdout goes to the prompt as {{output}}. It needs a
 # unique name, a prompt (a file relative to this directory), a command (run
 # with sh -c here, stopped after timeout_minutes, default 10) or both, and
 # exactly one of daily_at or every_minutes. enabled = false keeps a block
 # without it firing; mei schedule disable and enable set it.
-[[schedule]]
-name = "dream"
-prompt = "prompts/dream.md"
-daily_at = "03:00"       # local time HH:MM; or: every_minutes = 60
-role = "chat"            # the prompt runs with this role's model; left out means router.default_role
-notify = false           # keep this job's results out of the listen stream; left out means true

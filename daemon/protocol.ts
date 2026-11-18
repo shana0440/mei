@@ -9,6 +9,7 @@ export type ScheduleListing = Schedule & { dueAt: number | null };
 export type Requests = {
   chat: { message: { text: string; debug?: boolean }; reply: { result: string; topic: string } };
   job: { message: { name: string }; reply: { eventId: number } };
+  dream: { message: {}; reply: { eventId: number } };
   reset: { message: {}; reply: {} };
   reload: { message: {}; reply: {} };
   listen: { message: { after?: number }; reply: {} };

@@ -25,7 +25,7 @@ export type StepOutput = { output: string; sessionId?: string; topic?: string };
 
 export function stepsOf({ type, payload }: NewEvent): Step[] {
   if (type === "user.message") return ["agent", "voice"];
-  if (type === "session.idle") return ["agent"];
+  if (type === "session.idle" || type === "dream") return ["agent"];
   const job = payload as ScheduledJob;
   return [
     ...("command" in job ? (["command"] as const) : []),
