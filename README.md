@@ -139,7 +139,7 @@ Summaries are written from the working agent's transcript, so memory holds the o
 
 At `[dream] daily_at`, 03:00 by default, dream writes the summaries waiting in short-term memory into the notes and task files in `memory/`, and updates `memory/MEMORY.md`. When it succeeds, those summaries leave short-term memory; summaries written during the run wait for the next one. A failed run keeps them for the next night. With no summaries waiting, it does not run. `npm run status` shows how many are waiting, and `npm run dream` runs it now. Its instructions are in `prompts/dream.md` in the home.
 
-`memory/` is a git repository, so a bad dream can be undone. Before each run dream commits what you and the chat sessions changed since the last one, as `Before dream <event number>`, and after a successful run it commits what the run changed, as `Dream <event number>`. A run with no summaries waiting commits nothing. If the backup fails, the run fails without changing memory. To see what a run did and to undo it:
+`memory/` is a git repository, so a bad dream can be undone. Before each run dream commits what you and the chat sessions changed since the last one, as `Before dream <event number>`, and after a successful run it commits what the run changed, as `Dream <event number>`. A run with no summaries waiting commits nothing. If the backup fails, the run fails without changing memory and the error goes to [`listen`](#receiving-results). To see what a run did and to undo it:
 
 ```sh
 cd ~/.local/share/mei/memory
@@ -238,7 +238,7 @@ done
 
 With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation. A failed run sends its error as is.
 
-A schedule with `notify = false` is left out and not voiced. Chat answers, session summaries and dream are never sent.
+A schedule with `notify = false` is left out and not voiced. Chat answers and session summaries are never sent. Dream is sent only when it fails, with its error, so you hear when memory could not be backed up or written.
 
 Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
 
