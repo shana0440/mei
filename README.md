@@ -4,7 +4,7 @@ mei is a personal assistant that runs as a daemon on your machine.
 
 ## Usage
 
-Requires Node 24 and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider). With Nix, `nix-shell` provides both.
+Requires Node 24, git and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider). With Nix, `nix-shell` provides all three.
 
 ```sh
 npm install
@@ -260,7 +260,7 @@ mei reset --yes                 # permanently clear memory, history, logs and in
 journalctl --user -u mei        # what the daemon printed
 ```
 
-`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
+`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node`, `git` and `pi-bolt` are installed.
 
 The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>`, `mei dream`, `mei listen [--after <event number>]` and `mei schedule ...` are also available. Run `mei --help` for usage.
 

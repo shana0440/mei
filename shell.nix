@@ -6,6 +6,7 @@ in
 pkgs.mkShell {
   packages = [
     pkgs.nodejs_24
+    pkgs.git
     dotfiles.packages.${system}.pi-bolt
   ];
 }
