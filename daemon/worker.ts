@@ -15,6 +15,7 @@ import {
   stepAfter,
 } from "./inbox.ts";
 import type { InboxEvent, Step, StepOutput } from "./inbox.ts";
+import { commitMemory } from "./memory.ts";
 import { chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
@@ -173,6 +174,7 @@ const agentWorkByType: Record<string, Work | undefined> = {
   dream: async (event, deps) => {
     const summaries = shortTermMemory(deps.db);
     if (summaries.length === 0) return { output: "No summaries to write into memory", topic: "dream" };
+    await commitMemory(`Before dream ${event.id}`);
     const { ok, response, error } = await deps.run({
       prompt: fillPrompt(readFileSync(dreamPromptPath, "utf8"), {
         summaries: describeSummaries(summaries),
@@ -182,6 +184,7 @@ const agentWorkByType: Record<string, Work | undefined> = {
       logFile: logFileOf(event),
     });
     if (!ok) throw new Error(error);
+    await commitMemory(`Dream ${event.id}`);
     forgetSummaries(deps.db, summaries);
     return { output: response, topic: "dream" };
   },

@@ -144,7 +144,10 @@ export function lastFinishedId(db: DatabaseSync): number {
 export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
   return findEvents(
     db,
-    `WHERE id > ? AND status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
+    `WHERE id > ? AND (
+       status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
+       OR status = 'failed' AND type = 'dream'
+     )
      ORDER BY id`,
     id,
   );

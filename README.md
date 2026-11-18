@@ -4,7 +4,7 @@ mei is a personal assistant that runs as a daemon on your machine.
 
 ## Usage
 
-Requires Node 24 and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider). With Nix, `nix-shell` provides both.
+Requires Node 24, git and [Pi-Bolt](https://github.com/opensec-git/Pi-Bolt) (`pi-bolt` on your PATH, signed in to a model provider). With Nix, `nix-shell` provides all three.
 
 ```sh
 npm install
@@ -139,6 +139,18 @@ Summaries are written from the working agent's transcript, so memory holds the o
 
 At `[dream] daily_at`, 03:00 by default, dream writes the summaries waiting in short-term memory into the notes and task files in `memory/`, and updates `memory/MEMORY.md`. When it succeeds, those summaries leave short-term memory; summaries written during the run wait for the next one. A failed run keeps them for the next night. With no summaries waiting, it does not run. `npm run status` shows how many are waiting, and `npm run dream` runs it now. Its instructions are in `prompts/dream.md` in the home.
 
+`memory/` is a git repository, so a bad dream can be undone. Before each run dream commits what you and the chat sessions changed since the last one, as `Before dream <event number>`, and after a successful run it commits what the run changed, as `Dream <event number>`. A run with no summaries waiting commits nothing. If the backup fails, the run fails without changing memory and the error goes to [`listen`](#receiving-results). To see what a run did and to undo it:
+
+```sh
+cd ~/.local/share/mei/memory
+git log --stat                       # the commits, newest first
+git show <commit>                    # what one of them changed
+git restore --source=<commit> --staged --worktree .   # put memory back as it was at that commit
+git commit -m "Restore <commit>"
+```
+
+The history is kept in full and is cleared with the rest of memory by `npm run reset -- --yes`.
+
 ## Schedules
 
 mei runs a prompt or a command on a schedule when `config.toml` has a block for it.
@@ -226,7 +238,7 @@ done
 
 With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation. A failed run sends its error as is.
 
-A schedule with `notify = false` is left out and not voiced. Chat answers, session summaries and dream are never sent.
+A schedule with `notify = false` is left out and not voiced. Chat answers and session summaries are never sent. Dream is sent only when it fails, with its error, so you hear when memory could not be backed up or written.
 
 Results are kept while nothing is subscribed. `npm run listen -- --after <event number>` first prints the results that finished after that event, taking the number from the `id` of the last line you received or from `npm run status`. Without `--after`, only results from now on are printed. The command runs until you stop it: while the daemon is stopped it waits, then continues after the last result it printed.
 
@@ -260,7 +272,7 @@ mei reset --yes                 # permanently clear memory, history, logs and in
 journalctl --user -u mei        # what the daemon printed
 ```
 
-`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node` and `pi-bolt` are installed.
+`make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node`, `git` and `pi-bolt` are installed.
 
 The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>`, `mei dream`, `mei listen [--after <event number>]` and `mei schedule ...` are also available. Run `mei --help` for usage.
 

@@ -28,6 +28,7 @@ export COMMAND_FILE
 
 install:
 	@test -n "$(NODE)" || { echo "node is not on your PATH" >&2; exit 1; }
+	@command -v git >/dev/null || { echo "git is not on your PATH" >&2; exit 1; }
 	@command -v pi-bolt >/dev/null || { echo "pi-bolt is not on your PATH" >&2; exit 1; }
 	npm install
 	mkdir -p $(dir $(SERVICE)) $(dir $(COMMAND))
