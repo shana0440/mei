@@ -15,12 +15,12 @@ import {
   stepAfter,
 } from "./inbox.ts";
 import type { InboxEvent, Step, StepOutput } from "./inbox.ts";
-import { chatSessionsDir, home, logsDir, summarizePromptPath } from "./paths.ts";
+import { chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { route } from "./router.ts";
 import { runScript } from "./script.ts";
 import type { run } from "./runner.ts";
-import { recordActivity, saveSummary } from "./sessions.ts";
+import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 import { voice } from "./voice.ts";
 
@@ -169,6 +169,21 @@ const agentWorkByType: Record<string, Work | undefined> = {
     if (!ok) throw new Error(error);
     saveSummary(deps.db, sessionId, response, Date.now());
     return { output: response, sessionId };
+  },
+  dream: async (event, deps) => {
+    const summaries = shortTermMemory(deps.db);
+    if (summaries.length === 0) return { output: "No summaries to write into memory", topic: "dream" };
+    const { ok, response, error } = await deps.run({
+      prompt: fillPrompt(readFileSync(dreamPromptPath, "utf8"), {
+        summaries: describeSummaries(summaries),
+        now: new Date().toLocaleString(),
+      }),
+      model: deps.config.dream.model,
+      logFile: logFileOf(event),
+    });
+    if (!ok) throw new Error(error);
+    forgetSummaries(deps.db, summaries);
+    return { output: response, topic: "dream" };
   },
 };
 

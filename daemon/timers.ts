@@ -1,6 +1,7 @@
 import type { DatabaseSync } from "node:sqlite";
-import type { Schedule, ScheduleSpec } from "./config.ts";
+import type { Config, ScheduleSpec } from "./config.ts";
 import { addEvent } from "./inbox.ts";
+import { shortTermMemory } from "./sessions.ts";
 
 export type Timer = {
   id: number;
@@ -8,7 +9,7 @@ export type Timer = {
   payload: unknown;
   dueAt: number;
   status: "active" | "done";
-} & ({ kind: "schedule"; spec: ScheduleSpec } | { kind: "idle"; spec: {} });
+} & ({ kind: "schedule" | "dream"; spec: ScheduleSpec } | { kind: "idle"; spec: {} });
 
 function findTimers(db: DatabaseSync, where: string, ...params: number[]): Timer[] {
   return db
@@ -28,8 +29,8 @@ export function nextDue(spec: ScheduleSpec, now: number): number {
   return due.getTime();
 }
 
-export function syncSchedules(db: DatabaseSync, configured: Schedule[], now: number): void {
-  const schedules = configured.filter(({ enabled }) => enabled);
+export function syncTimers(db: DatabaseSync, config: Pick<Config, "schedules" | "dream">, now: number): void {
+  const schedules = config.schedules.filter(({ enabled }) => enabled);
   const upsert = db.prepare(
     `INSERT INTO timers (name, kind, spec, payload, due_at, status) VALUES (?, 'schedule', ?, ?, ?, 'active')
      ON CONFLICT (name) DO UPDATE SET
@@ -43,6 +44,16 @@ export function syncSchedules(db: DatabaseSync, configured: Schedule[], now: num
   db.prepare("DELETE FROM timers WHERE kind = 'schedule' AND name NOT IN (SELECT value FROM json_each(?))").run(
     JSON.stringify(schedules.map(({ name }) => name)),
   );
+  db.prepare(
+    `INSERT INTO timers (name, kind, spec, payload, due_at, status) VALUES ('dream:daily', 'dream', ?, '{}', ?, 'active')
+     ON CONFLICT (name) DO UPDATE SET
+       spec = excluded.spec,
+       due_at = CASE WHEN spec = excluded.spec THEN due_at ELSE excluded.due_at END`,
+  ).run(JSON.stringify(config.dream.spec), nextDue(config.dream.spec, now));
+}
+
+export function queueDream(db: DatabaseSync, now: number): number | undefined {
+  return shortTermMemory(db).length > 0 ? addEvent(db, { type: "dream", payload: {} }, now) : undefined;
 }
 
 export function setIdleTimer(db: DatabaseSync, sessionId: string, dueAt: number): void {
@@ -71,7 +82,8 @@ export function fire(db: DatabaseSync, timer: Timer, now: number): void {
       addEvent(db, { type: "session.idle", payload: timer.payload }, now);
       db.prepare("UPDATE timers SET status = 'done' WHERE id = ?").run(timer.id);
     } else {
-      addEvent(db, { type: "timer.fired", payload: timer.payload }, now);
+      if (timer.kind === "dream") queueDream(db, now);
+      else addEvent(db, { type: "timer.fired", payload: timer.payload }, now);
       db.prepare("UPDATE timers SET due_at = ? WHERE id = ?").run(nextDue(timer.spec, now), timer.id);
     }
     db.exec("COMMIT");

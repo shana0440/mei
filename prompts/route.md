@@ -1,13 +1,11 @@
-You decide which conversation a new message belongs to. Below is one JSON object with the user's `message`, the `sessions` that are still open, most recent first, and the `closed` sessions of the last 30 days. Each open session has its `id`, its `topic`, when it was last active, and its last message and reply. Each closed session has its `id`, its `topic` and a `summary`. Each of the `roles` has a `name` and what it is for in `use`. `projects` is the user's list of locations on this machine and their purposes.
+You decide which conversation a new message belongs to. Below is one JSON object with the user's `message` and the `recent` messages before it, most recent first, the way the user sees them in a chat. Each recent message has its `id`, the `topic` of its task, when it was answered, the `message` and its `reply`. Each of the `roles` has a `name` and what it is for in `use`. `projects` is the user's list of locations on this machine and their purposes.
 
-- Resume an open session when the message continues or follows up on that session's task.
-- A message with no topic of its own, such as "and the second one?", belongs to the most recent open session.
-- Start a new session when the message begins a new task, or when no open session fits.
-- A closed session stays closed. When the message returns to the subject of a closed session, start a new session, name the closed session in `continues` and reuse its topic.
-- For a new session, pick the role whose `use` best fits the task. A resumed session keeps its role, so leave `role` as none.
-- For a new session, pick the folder the task's work happens in: a `Path` from `projects`, or a folder inside one when the message names it. Pick home when the task belongs to no listed location. A resumed session keeps its folder, so leave `folder` as none.
+- When the message continues or follows up on the task of a recent message, put the `id` of the most recent message of that task in `follows`.
+- A message with no topic of its own, such as "and the second one?", follows the most recent message.
+- When the message begins a new task, or no recent message fits, `follows` is none.
+- When `follows` is none, name the task in `topic`, pick the role whose `use` best fits it, and pick the folder its work happens in: a `Path` from `projects`, or a folder inside one when the message names it. Pick home when the task belongs to no listed location. Otherwise leave `topic`, `role` and `folder` as none.
 
 Answer with one JSON object and nothing else:
 
-{"session": "<id of the open session to resume, or new>", "continues": "<id of the closed session a new session returns to, or none>", "topic": "<short name for the task, at most five words>", "role": "<name of the role for a new session, or none>", "folder": "<path of the folder for a new session, home, or none>", "reason": "<one sentence>"}
+{"follows": "<id of the recent message this one follows up on, or none>", "topic": "<short name for a new task, at most five words, or none>", "role": "<name of the role for a new task, or none>", "folder": "<path of the folder for a new task, home, or none>", "reason": "<one sentence>"}
 

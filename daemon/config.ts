@@ -78,13 +78,14 @@ const configTables = table({
   router: table({ model: text, default_role: text }),
   character: table({ name: text, file: text.default("CHARACTER.md"), enabled: flag, model: text }),
   idle: table({ after_minutes: positiveNumber, model: text }),
+  dream: table({ daily_at: timeOfDay, model: text }),
   schedule: z.array(scheduleTable, { error: "must be written as [[schedule]]" }).default([]),
 });
 
 class BrokenRule extends Error {}
 
 function settings(
-  { roles, router, character, idle, schedule }: z.output<typeof configTables>,
+  { roles, router, character, idle, dream, schedule }: z.output<typeof configTables>,
   fail: (path: PropertyKey[]) => Fail,
 ) {
   const models = new Map(Object.entries(roles).map(([name, { model }]) => [name, model]));
@@ -109,6 +110,7 @@ function settings(
     router: { model: router.model, defaultRole: router.default_role },
     character: { ...character, file: characterFile },
     idle: { afterMinutes: idle.after_minutes, model: idle.model },
+    dream: { spec: { daily_at: dream.daily_at }, model: dream.model },
     schedules,
   };
 }

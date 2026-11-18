@@ -3,8 +3,8 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve, sep } from "node:path";
 import { home, projectsPath, routePromptPath } from "./paths.ts";
-import { closedSessions, sessionsActiveSince } from "./sessions.ts";
-import type { ClosedSession } from "./sessions.ts";
+import { describeSummaries, findSession, recentMessages, shortTermMemory } from "./sessions.ts";
+import type { Session, SummarizedSession } from "./sessions.ts";
 import type { Role } from "./config.ts";
 import type { Deps } from "./worker.ts";
 
@@ -17,13 +17,11 @@ export type Route = {
   reason: string;
   context: string;
 };
-type Answer = { session?: unknown; continues?: unknown; topic?: unknown; role?: unknown; folder?: unknown; reason?: unknown };
-type Pick = { topic: string; reason: string; continued?: ClosedSession; role?: unknown; folder?: unknown };
+type Answer = { follows?: unknown; topic?: unknown; role?: unknown; folder?: unknown; reason?: unknown };
+type Pick = { topic: string; reason: string; continued?: Session; role?: unknown; folder?: unknown };
 
 const exchangeLength = 500;
-const day = 24 * 60 * 60_000;
-const offeredDays = 30;
-const contextDays = 7;
+const recentCount = 10;
 
 function cut(text: string, length: number): string {
   return text.length > length ? `${text.slice(0, length)}…` : text;
@@ -58,23 +56,20 @@ function parseAnswer(response: string): Answer {
   }
 }
 
-function shortTermMemory(closed: ClosedSession[], continued: ClosedSession | undefined, now: number): string {
-  const recent = closed.filter((session) => session !== continued && session.closedAt >= now - contextDays * day);
+function contextFor(continued: Session | undefined, summaries: SummarizedSession[]): string {
+  const others = summaries.filter(({ id }) => id !== continued?.id);
   const parts = [
-    continued && `This session continues the closed session "${continued.topic}". Where it stood:\n${continued.summary}`,
-    recent.length > 0 &&
-      `Other sessions that closed in the last ${contextDays} days, newest first:\n` +
-        recent
-          .map(({ topic, closedAt, summary }) => `- ${topic} (closed ${new Date(closedAt).toLocaleString()}): ${summary}`)
-          .join("\n"),
+    continued &&
+      (continued.summary
+        ? `This conversation continues "${continued.topic}". Where it stood:\n\n${continued.summary}`
+        : `This conversation continues "${continued.topic}".`),
+    others.length > 0 && `Other recent work, newest first:\n\n${describeSummaries(others)}`,
   ].filter(Boolean);
-  return parts.length > 0 ? ["## Short-term memory", ...parts].join("\n\n") : "";
+  return parts.length > 0 ? ["## Recent work", ...parts].join("\n\n") : "";
 }
 
 export async function route({ db, config, run }: Deps, text: string): Promise<Route> {
-  const now = Date.now();
-  const sessions = sessionsActiveSince(db, now - config.idle.afterMinutes * 60_000);
-  const closed = closedSessions(db, now - offeredDays * day);
+  const messages = recentMessages(db, recentCount);
   const findRole = (name: unknown) =>
     config.roles.find((role) => role.name === name) ??
     (config.roles.find((role) => role.name === config.router.defaultRole) as Role);
@@ -85,19 +80,18 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
     folder: findFolder(folder),
     isNew: true,
     reason,
-    context: shortTermMemory(closed, continued, now),
+    context: contextFor(continued, shortTermMemory(db)),
   });
 
   const data = {
     message: text,
-    sessions: sessions.map((session) => ({
-      id: session.id,
-      topic: session.topic,
-      lastActive: new Date(session.lastActiveAt).toLocaleString(),
-      lastMessage: cut(session.lastMessage, exchangeLength),
-      lastReply: cut(session.lastReply, exchangeLength),
+    recent: messages.map(({ id, topic, at, message, reply }) => ({
+      id,
+      topic,
+      at: new Date(at).toLocaleString(),
+      message: cut(message, exchangeLength),
+      reply: cut(reply, exchangeLength),
     })),
-    closed: closed.map(({ id, topic, summary }) => ({ id, topic, summary })),
     roles: config.roles.map(({ name, use }) => ({ name, use })),
     projects: existsSync(projectsPath) ? readFileSync(projectsPath, "utf8") : "",
   };
@@ -110,16 +104,19 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
   if (!ok) return newSession({ topic: firstWords(text), reason: `The router failed: ${error}` });
 
   const answer = parseAnswer(response);
-  const topic = typeof answer.topic === "string" && answer.topic ? answer.topic : firstWords(text);
   const reason = typeof answer.reason === "string" ? answer.reason : "";
-  if (answer.session === "new") {
-    const continued = closed.find(({ id }) => id === answer.continues);
-    return newSession({ topic: continued?.topic ?? topic, reason, continued, role: answer.role, folder: answer.folder });
+  if (answer.follows === "none") {
+    const topic = typeof answer.topic === "string" && answer.topic ? answer.topic : firstWords(text);
+    return newSession({ topic, reason, role: answer.role, folder: answer.folder });
   }
-  const session = sessions.find(({ id }) => id === answer.session);
+  const followed = messages.find(({ id }) => String(id) === String(answer.follows));
+  const session = followed && findSession(db, followed.sessionId);
   if (!session) {
     return newSession({ topic: firstWords(text), reason: `The router gave no usable answer: ${cut(response, 200)}` });
   }
-  const { id, topic: sessionTopic, role, folder, context } = session;
-  return { sessionId: id, topic: sessionTopic, role: findRole(role), folder: folder || home, isNew: false, reason, context };
+  if (session.lastActiveAt < Date.now() - config.idle.afterMinutes * 60_000) {
+    return newSession({ topic: session.topic, reason, continued: session, role: session.role, folder: session.folder });
+  }
+  const { id, topic, role, folder, context } = session;
+  return { sessionId: id, topic, role: findRole(role), folder: folder || home, isNew: false, reason, context };
 }

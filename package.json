@@ -9,6 +9,7 @@
     "reload": "node daemon/reload.ts",
     "chat": "node daemon/chat.ts",
     "job": "node daemon/job.ts",
+    "dream": "node daemon/dream.ts",
     "listen": "node daemon/listen.ts",
     "schedule": "node daemon/schedule.ts",
     "config": "node daemon/configure.ts"
