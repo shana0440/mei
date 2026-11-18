@@ -8,8 +8,11 @@ const usage = `Usage:
   mei job <schedule name>
   mei listen [--after <event number>]
   mei schedule list|add|remove|enable|disable ...
+  mei config [get <key> | set <key> <value>]
 
-Connects to the running mei daemon.`;
+Connects to the running mei daemon; mei config also works while it is stopped.`;
+
+const modules: Record<string, string> = { config: "configure" };
 
 await runCommand(async () => {
   const command = process.argv[2];
@@ -17,10 +20,10 @@ await runCommand(async () => {
     console.log(usage);
     return;
   }
-  if (!["chat", "status", "reload", "reset", "job", "listen", "schedule"].includes(command)) {
+  if (!["chat", "status", "reload", "reset", "job", "listen", "schedule", "config"].includes(command)) {
     throw new Error(`Unknown command "${command}"\n\n${usage}`);
   }
   if (command === "status" && process.argv.length > 3) throw new Error("Usage: mei status");
   process.argv.splice(2, 1);
-  await import(`./${command}.ts`);
+  await import(`./${modules[command] ?? command}.ts`);
 });

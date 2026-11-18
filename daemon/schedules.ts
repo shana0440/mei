@@ -6,8 +6,8 @@ import { configPath } from "./paths.ts";
 
 export type ScheduleChange = { action: "remove" | "enable" | "disable"; name: string };
 
-const tableHeader = /^\[\[?[\w.\-"]+\]\]?\s*(#.*)?$/;
-const keyLine = /^\s*[\w-]+\s*=/;
+export const tableHeader = /^\[\[?[\w.\-"]+\]\]?\s*(#.*)?$/;
+export const keyLine = /^\s*[\w-]+\s*=/;
 
 type Block = { start: number; end: number };
 

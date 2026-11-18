@@ -64,7 +64,7 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | Path | What it is |
 |---|---|
 | `AGENTS.md` | operating instructions |
-| `CHARACTER.md` | assistant name, language, tone and speaking style |
+| `CHARACTER.md` | the default character: language, tone and speaking style |
 | `PROJECTS.md` | the locations on your machine and what each is for |
 | `config.toml` | settings |
 | `prompts/` | `summarize.md`, `dream.md` and the prompts of your own schedules |
@@ -74,13 +74,23 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 
 When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit. Scheduled runs and memory writing start in the home; a chat session starts in the folder the router picked for it.
 
-Edit `CHARACTER.md` to change the assistant's identity and communication preferences. It is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
+Edit `CHARACTER.md` to change the assistant's communication preferences. To keep several characters, write each in its own file and point `[character] file` at the one to use. The file is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
 `state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer and a notified scheduled result, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
 
 ## Configuration
 
-`config.toml` in the home holds the settings. After editing it, run `mei reload` (or `npm run reload`) to apply changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
+`config.toml` in the home holds the settings. Change them with `mei config`:
+
+```sh
+mei config                                    # open config.toml in $VISUAL or $EDITOR
+mei config get character.file                 # print one value, as <table>.<key>
+mei config set character.file characters/pirate.md
+```
+
+Both `mei config` and `set` check the result the same way the daemon does before saving it, and reload the daemon if it is running. When the check fails, `mei config` offers to reopen your draft, and `set` changes nothing. `set` keeps the rest of the file and its comments as they are; a value is read as TOML when it is one (`true`, `45`, `"quoted"`) and as text otherwise. Schedules are changed with `mei schedule` or in the editor. `mei config` also works while the daemon is stopped, which is how to fix a config that keeps it from starting.
+
+If you edit `config.toml` yourself, run `mei reload` (or `npm run reload`) to apply the changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
 
 Reload updates roles, models, character settings, idle timeouts and schedules. Unchanged schedule times are preserved; changed intervals start from the reload time. Active idle timers are adjusted to the new timeout. Work already running finishes with its original settings; queued work uses the new settings. Already queued scheduled runs keep their original schedule payload.
 
@@ -100,7 +110,9 @@ model = "anthropic/claude-haiku-5-5"   # model that decides which session a mess
 default_role = "chat"    # role used when the router fails or picks no known role
 
 [character]
-enabled = true           # rewrite each answer in the voice of CHARACTER.md; false sends the working agent's answer as is
+name = "Mei"             # the name the voice answers as
+file = "CHARACTER.md"    # the character to speak as, relative to the home; point it at another file to switch
+enabled = true           # rewrite each answer in the voice of the character file; false sends the working agent's answer as is
 model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
 [idle]
@@ -112,9 +124,9 @@ Each message goes through up to three runs:
 
 1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder until it closes; a session that continues a closed one gets a fresh pick.
 2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
-3. With `[character] enabled`, the voice rewrites the answer as `CHARACTER.md` asks. It sees the last four things it said to you across all topics, chat answers and scheduled results alike, with how long ago each was, so it can tell when it is changing the subject. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+3. With `[character] enabled`, the voice rewrites the answer as the character file asks, under the `name` set in `[character]`. It sees the last four things it said to you across all topics, chat answers and scheduled results alike, with how long ago each was, so it can tell when it is changing the subject. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
 
-Memory is written from the working agent's transcript, so it holds the original answers. The voice follows `CHARACTER.md` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
+Memory is written from the working agent's transcript, so it holds the original answers. The voice follows the character file and its `name` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
 ## Schedules
 
@@ -217,7 +229,7 @@ To subscribe from your own program, connect to the Unix socket `state/mei.sock` 
 
 ## Running
 
-The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing works while it is stopped.
+The daemon is the one long-lived process: it holds the message queue, fires schedules, closes quiet sessions and starts an agent run for each of them. Every other command is a small client that talks to it, so nothing but `config` works while it is stopped.
 
 | Command | What it does |
 |---|---|
@@ -229,6 +241,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run job -- <schedule name>` | run a schedule now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 | `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
+| `npm run config -- [get <key> \| set <key> <value>]` | [change settings](#configuration) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
