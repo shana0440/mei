@@ -77,6 +77,8 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 
 When the daemon starts, it copies each of these files that is missing from `template/` in this checkout. A file that exists is left alone, so the home is yours to edit. Scheduled runs and memory writing start in the home; a chat session starts in the folder the router picked for it.
 
+A newer checkout can bring newer prompts and skills that an existing home does not get on its own. `mei update` (or `npm run update`) lists every file in `template/` that is missing from the home or differs from it, and replaces the ones you select with the template's version. What you changed in a replaced file is lost, so leave your own files, like `config.toml` and `CHARACTER.md`, unselected. It works while the daemon is stopped.
+
 Edit `CHARACTER.md` to change the assistant's communication preferences. To keep several characters, write each in its own file and point `[character] file` at the one to use. The file is read for every answer, so changes apply to the next message without restarting the daemon. Memory reset preserves it. The executable and service remain named `mei`, regardless of the assistant's name. Keep operating instructions in `AGENTS.md` and identity and communication preferences in `CHARACTER.md`.
 
 `state/` holds the message history and session summaries in `mei.db`, the conversations in `sessions/chat/`, and the routing decision and full event stream of each answer and scheduled run in `logs/<message number>.jsonl`. For an answer and a notified scheduled result, the log ends with a `mei_voice` line holding the working agent's `original` answer and the `voiced` one you received; compare them to improve `CHARACTER.md`.
@@ -284,6 +286,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
 | `npm run background -- <add\|list\|cancel>` | [run a task in the background](#background-tasks) |
 | `npm run config -- [get <key> \| set <key> <value>]` | [change settings](#configuration) |
+| `npm run update` | [replace home files with newer ones from the template](#home) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
 
