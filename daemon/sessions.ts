@@ -38,7 +38,7 @@ export function recentMessages(db: DatabaseSync, limit: number): RecentMessage[]
       `SELECT events.id, sessions.id AS sessionId, sessions.topic, events.finished_at AS at,
          json_extract(events.payload, '$.text') AS message, COALESCE(events.result, events.handoff) AS reply
        FROM events JOIN sessions ON sessions.id = events.session_id
-       WHERE events.type = 'user.message' AND events.status = 'done'
+       WHERE events.type IN ('user.message', 'task.background') AND events.status = 'done'
        ORDER BY events.id DESC LIMIT ?`,
     )
     .all(limit) as RecentMessage[];

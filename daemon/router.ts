@@ -5,7 +5,7 @@ import { resolve, sep } from "node:path";
 import { home, projectsPath, routePromptPath } from "./paths.ts";
 import { describeSummaries, findSession, recentMessages, shortTermMemory } from "./sessions.ts";
 import type { Session, SummarizedSession } from "./sessions.ts";
-import type { Role } from "./config.ts";
+import type { Config, Role } from "./config.ts";
 import type { Deps } from "./worker.ts";
 
 export type Route = {
@@ -43,7 +43,14 @@ function findFolder(answer: unknown): string {
   return listed && existsSync(folder) && statSync(folder).isDirectory() ? folder : home;
 }
 
-function firstWords(text: string): string {
+export function findRole(config: Config, name: unknown): Role {
+  return (
+    config.roles.find((role) => role.name === name) ??
+    (config.roles.find((role) => role.name === config.router.defaultRole) as Role)
+  );
+}
+
+export function firstWords(text: string): string {
   return text.split(/\s+/).slice(0, 6).join(" ");
 }
 
@@ -56,7 +63,7 @@ function parseAnswer(response: string): Answer {
   }
 }
 
-function contextFor(continued: Session | undefined, summaries: SummarizedSession[]): string {
+export function contextFor(continued: Session | undefined, summaries: SummarizedSession[]): string {
   const others = summaries.filter(({ id }) => id !== continued?.id);
   const parts = [
     continued &&
@@ -70,13 +77,10 @@ function contextFor(continued: Session | undefined, summaries: SummarizedSession
 
 export async function route({ db, config, run }: Deps, text: string): Promise<Route> {
   const messages = recentMessages(db, recentCount);
-  const findRole = (name: unknown) =>
-    config.roles.find((role) => role.name === name) ??
-    (config.roles.find((role) => role.name === config.router.defaultRole) as Role);
   const newSession = ({ topic, reason, continued, role, folder }: Pick): Route => ({
     sessionId: randomUUID(),
     topic,
-    role: findRole(role),
+    role: findRole(config, role),
     folder: findFolder(folder),
     isNew: true,
     reason,
@@ -118,5 +122,5 @@ export async function route({ db, config, run }: Deps, text: string): Promise<Ro
     return newSession({ topic: session.topic, reason, continued: session, role: session.role, folder: session.folder });
   }
   const { id, topic, role, folder, context } = session;
-  return { sessionId: id, topic, role: findRole(role), folder: folder || home, isNew: false, reason, context };
+  return { sessionId: id, topic, role: findRole(config, role), folder: folder || home, isNew: false, reason, context };
 }

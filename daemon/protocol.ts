@@ -16,6 +16,12 @@ export type Requests = {
   status: { message: {}; reply: { events: InboxEvent[]; timers: Timer[]; shortTerm: SummarizedSession[] } };
   schedules: { message: {}; reply: { schedules: ScheduleListing[] } };
   schedule: { message: { change: ScheduleChange }; reply: {} };
+  task: {
+    message: { text: string; at?: number; say?: boolean; fromSession?: string };
+    reply: { eventId: number; listening: boolean };
+  };
+  tasks: { message: {}; reply: { tasks: InboxEvent[]; timeoutMinutes: number } };
+  cancel: { message: { eventId: number }; reply: {} };
 };
 
 export type RequestType = keyof Requests;

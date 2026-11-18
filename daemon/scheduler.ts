@@ -1,3 +1,4 @@
+import { earliestWaiting } from "./inbox.ts";
 import { dueTimers, earliestDue, fire } from "./timers.ts";
 import type { Deps } from "./worker.ts";
 
@@ -10,8 +11,9 @@ export function startScheduler({ db }: Deps, wake: () => void): () => void {
     const now = Date.now();
     const due = dueTimers(db, now);
     for (const timer of due) fire(db, timer, now);
-    if (due.length > 0) wake();
-    timeout = setTimeout(rearm, Math.min(longestWait, (earliestDue(db) ?? Infinity) - now));
+    wake();
+    const nextAt = Math.min(earliestDue(db) ?? Infinity, earliestWaiting(db, now) ?? Infinity);
+    timeout = setTimeout(rearm, Math.min(longestWait, nextAt - now));
   }
   rearm();
   return rearm;

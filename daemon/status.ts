@@ -10,6 +10,10 @@ function outcome({ result, error }: InboxEvent): string {
   return (error ?? result ?? "").split("\n")[0];
 }
 
+function state({ status, runAt }: InboxEvent): string {
+  return status === "pending" && runAt !== null && runAt > Date.now() ? `waiting until ${new Date(runAt).toLocaleString()}` : status;
+}
+
 await runCommand(async () => {
   const { events, timers, shortTerm } = await request({ type: "status" });
   console.log("daemon: running");
@@ -22,7 +26,7 @@ await runCommand(async () => {
   }
   for (const event of events) {
     console.log(
-      [`#${event.id}`, event.type, event.status, event.topic ?? "-", duration(event), outcome(event)].join("  ").trimEnd(),
+      [`#${event.id}`, event.type, state(event), event.topic ?? "-", duration(event), outcome(event)].join("  ").trimEnd(),
     );
   }
 });
