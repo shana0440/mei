@@ -18,7 +18,7 @@ default_role = "chat"    # role used when the router fails or picks no known rol
 
 [character]
 name = "Mei"             # the name the voice answers as
-file = "CHARACTER.md"     # the character to speak as, relative to this directory; point it at another file to switch
+file = "CHARACTER.md"    # the character to speak as, relative to this directory; point it at another file to switch
 enabled = true           # rewrite each answer in the voice of the character file; false sends the working agent's answer as is
 model = "anthropic/claude-haiku-5-5"   # model that does the rewriting
 
