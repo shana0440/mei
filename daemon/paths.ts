@@ -10,6 +10,7 @@ export const projectsPath = join(home, "PROJECTS.md");
 export const routePromptPath = join(root, "prompts", "route.md");
 export const summarizePromptPath = join(home, "prompts", "summarize.md");
 export const dreamPromptPath = join(home, "prompts", "dream.md");
+export const notebooksDir = join(home, "notebooks");
 
 const stateDir = join(home, "state");
 export const dbPath = join(stateDir, "mei.db");
