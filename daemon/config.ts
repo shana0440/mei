@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { parse } from "smol-toml";
 import type { TomlTable } from "smol-toml";
 import { z } from "zod";
@@ -76,7 +76,7 @@ function scheduledJob(schedule: ScheduleTable, models: Map<string, string>, defa
 const configTables = table({
   roles: z.record(z.string(), role, { error: "must be written as [roles.<name>]" }),
   router: table({ model: text, default_role: text }),
-  character: table({ name: text, enabled: flag, model: text }),
+  character: table({ name: text, file: text.default("CHARACTER.md"), enabled: flag, model: text }),
   idle: table({ after_minutes: positiveNumber, model: text }),
   schedule: z.array(scheduleTable, { error: "must be written as [[schedule]]" }).default([]),
 });
@@ -92,6 +92,8 @@ function settings(
   if (!models.has(router.default_role)) {
     fail(["router"])(`default_role "${router.default_role}" is not defined under [roles]`);
   }
+  const characterFile = resolve(home, character.file);
+  if (!existsSync(characterFile)) fail(["character"])(`the character file ${character.file} does not exist`);
   const schedules = schedule.map((table, index) => ({
     ...scheduledJob(table, models, router.default_role, fail(["schedule", index])),
     spec: spec(table, fail(["schedule", index])),
@@ -105,7 +107,7 @@ function settings(
   return {
     roles: Object.entries(roles).map(([name, { model, use }]) => ({ name, model, use })),
     router: { model: router.model, defaultRole: router.default_role },
-    character,
+    character: { ...character, file: characterFile },
     idle: { afterMinutes: idle.after_minutes, model: idle.model },
     schedules,
   };
