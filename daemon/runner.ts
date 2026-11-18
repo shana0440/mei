@@ -14,6 +14,8 @@ export type RunOptions = {
   appendSystemPrompt?: string;
   logFile?: string;
   onLine?: (line: string) => void;
+  timeoutMinutes?: number;
+  signal?: AbortSignal;
 };
 
 export type RunResult = { ok: boolean; response: string; error: string; sessionId: string };
@@ -31,6 +33,7 @@ type StreamRecord =
   | { type: "agent_settled"; aborted: boolean };
 
 const stderrTailLength = 2000;
+const stopGraceMs = 5000;
 
 function sessionArgs({ sessionId, sessionDir }: RunOptions): string[] {
   if (!sessionId && !sessionDir) return ["--no-session"];
@@ -77,10 +80,33 @@ export async function run(options: RunOptions): Promise<RunResult> {
   const { logFile, onLine } = options;
   if (logFile) mkdirSync(dirname(logFile), { recursive: true });
 
+  const { timeoutMinutes, signal } = options;
+  const stoppable = timeoutMinutes !== undefined || signal !== undefined;
   const child = spawn("pi-bolt", runArgs(options), {
     cwd: options.cwd ?? home,
+    detached: stoppable,
     stdio: ["ignore", "pipe", "pipe"],
   });
+  const signalGroup = (signal: NodeJS.Signals) => {
+    try {
+      if (child.pid !== undefined) process.kill(-child.pid, signal);
+    } catch {}
+  };
+  let stopped: string | undefined;
+  let forceKill: NodeJS.Timeout | undefined;
+  const stop = (reason: string) => {
+    if (stopped) return;
+    stopped = reason;
+    signalGroup("SIGTERM");
+    forceKill = setTimeout(() => signalGroup("SIGKILL"), stopGraceMs);
+  };
+  child.on("close", () => clearTimeout(forceKill));
+  const timeout =
+    timeoutMinutes === undefined
+      ? undefined
+      : setTimeout(() => stop(`the run took longer than ${timeoutMinutes} minutes and was stopped`), timeoutMinutes * 60_000);
+  const cancel = () => stop("the run was cancelled");
+  signal?.addEventListener("abort", cancel, { once: true });
   const exitFailure = new Promise<string | undefined>((resolve) => {
     child.on("error", (error) => resolve(`pi-bolt did not start: ${error.message}`));
     child.on("close", (code, signal) =>
@@ -101,7 +127,13 @@ export async function run(options: RunOptions): Promise<RunResult> {
   for await (const line of lines(child.stdout.setEncoding("utf8"))) {
     if (logFile) appendFileSync(logFile, `${line}\n`);
     onLine?.(line);
-    const record: StreamRecord = JSON.parse(line);
+    let record: StreamRecord;
+    try {
+      record = JSON.parse(line);
+    } catch (error) {
+      if (stopped) break;
+      throw error;
+    }
     if (record.type === "session") sessionId = record.id;
     if (record.type === "message_end" && record.message.role === "assistant" && aborted === undefined) {
       lastAssistant = record.message;
@@ -109,7 +141,10 @@ export async function run(options: RunOptions): Promise<RunResult> {
     if (record.type === "agent_settled") aborted ??= record.aborted;
   }
 
+  clearTimeout(timeout);
+  signal?.removeEventListener("abort", cancel);
   const failure =
+    stopped ??
     (await exitFailure) ??
     (aborted === undefined ? "the stream ended without agent_settled" : undefined) ??
     (aborted ? "the run was aborted" : undefined) ??
