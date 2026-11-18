@@ -51,7 +51,7 @@ Day 1 is now ...
 
 Every night, [dream](#dream) consolidates the summaries into long-term memory, the notes and task files in `memory/` in the home, and they leave short-term memory. A new session reads long-term memory as it needs it. Following up on a session whose summary is already consolidated carries over only its topic. The instructions for the summary are in `prompts/summarize.md` in the home.
 
-What must not wait for a session to close, mei writes down at once in `notebooks/` in the home: something you ask it to remember, a correction, a decision. A session opened a minute later can already read it. `notebooks/` is the one place such a fact is kept: summaries and `memory/` point to its file in place of repeating it, so changing your mind means editing one entry. Dream leaves `notebooks/` alone. The instructions for writing it are under "Notebooks" in `AGENTS.md` in the home.
+What must not wait for a session to close, mei writes down at once in `notebooks/` in the home: something you ask it to remember, a correction, a decision. A session opened a minute later can already read it. Memory stays what mei relies on: each night dream brings `memory/` up to date with what the notebooks hold that still matters, and leaves the notebooks as they are, a record mei looks things up in. Until then, the summaries of closed sessions carry changes to new sessions, and they override `memory/` where the two differ. The instructions for writing it are under "Notebooks" in `AGENTS.md` in the home.
 
 The topic and the debug output go to stderr, so `npm run -s chat -- "hi" 2>/dev/null` prints the answer alone. Ctrl-C stops waiting; the message is still answered, and `npm run status` shows the result.
 
@@ -71,7 +71,7 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | `config.toml` | settings |
 | `prompts/` | `summarize.md`, `dream.md` and the prompts of your own schedules |
 | `memory/` | what mei remembers about you and your unfinished tasks |
-| `notebooks/` | what mei wrote down during a conversation to keep as it is |
+| `notebooks/` | what mei wrote down during a conversation, to look up what it does not remember |
 | `.agents/skills/` | mei's skills |
 | `state/` | what the daemon stores, described below |
 
