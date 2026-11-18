@@ -22,7 +22,7 @@ export async function voice({ db, config, run }: Deps, voicing: Voicing): Promis
   if (!config.character.enabled) return answer;
   const data = { recent: recentlySaid(db, recentLimit, Date.now()), ...about, answer };
   const { ok, response, error } = await run({
-    prompt: `${task(voicing)} "recent" is what you last said to the user, oldest first, across topics. Rewrite the answer as your character and reply with it only.\n\n${JSON.stringify(data, null, 2)}`,
+    prompt: `${task(voicing)} "recent" is what you last said to the user, oldest first, across topics. The answer is yours: what it says was done, you did. Rewrite it as your character, keeping every fact, and reply with it only.\n\n${JSON.stringify(data, null, 2)}`,
     model: config.character.model,
     tools: false,
     contextFiles: false,
