@@ -30,6 +30,9 @@ model = "anthropic/claude-haiku-5-5"   # model that summarizes a closed session
 daily_at = "03:00"       # local time HH:MM when the day's summaries are written into memory/
 model = "anthropic/claude-haiku-5-5"   # model that writes them
 
+[background]
+timeout_minutes = 30     # stop a background task running longer than this and send its error
+
 # Each [[schedule]] runs a prompt file on its own, a command without an agent,
 # or both: the command's stdout goes to the prompt as {{output}}. It needs a
 # unique name, a prompt (a file relative to this directory), a command (run

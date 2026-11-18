@@ -12,6 +12,7 @@ export const summarizePromptPath = join(home, "prompts", "summarize.md");
 export const dreamPromptPath = join(home, "prompts", "dream.md");
 export const notebooksDir = join(home, "notebooks");
 export const memoryDir = join(home, "memory");
+export const backgroundSkillPath = join(home, ".agents", "skills", "background", "SKILL.md");
 
 const stateDir = join(home, "state");
 export const dbPath = join(stateDir, "mei.db");

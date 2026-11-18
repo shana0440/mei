@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { appendFileSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
@@ -14,16 +15,17 @@ import {
   schedulesWaitingForCommand,
   stepAfter,
 } from "./inbox.ts";
-import type { InboxEvent, Step, StepOutput } from "./inbox.ts";
+import type { BackgroundTask, InboxEvent, Step, StepOutput } from "./inbox.ts";
 import { commitMemory } from "./memory.ts";
-import { chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
+import { backgroundSkillPath, chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
-import { route } from "./router.ts";
+import { contextFor, findRole, firstWords, route } from "./router.ts";
 import { runScript } from "./script.ts";
 import type { run } from "./runner.ts";
 import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 import { voice } from "./voice.ts";
+import type { About } from "./voice.ts";
 
 export type Deps = {
   db: DatabaseSync;
@@ -31,22 +33,39 @@ export type Deps = {
   run: typeof run;
   rearm: () => void;
   onLine: (eventId: number, line: string) => void;
+  onStarted: (event: InboxEvent) => void;
   onFinished: (event: InboxEvent) => void;
 };
 
-type Work = (event: InboxEvent, deps: Deps) => Promise<StepOutput>;
+export type Worker = { wake: () => void; cancel: (eventId: number) => void };
+
+type Work = (event: InboxEvent, deps: Deps, signal: AbortSignal) => Promise<StepOutput>;
 type CommandJob = Extract<ScheduledJob, { command: string }>;
 type PromptJob = Extract<ScheduledJob, { prompt: string }>;
 
-export function startWorker(deps: Deps): () => void {
+const backgroundHint = `## Background tasks
+
+When a task will take more than a few minutes, or the user wants something done or said at a later time, follow ${backgroundSkillPath} to hand it to a background task, then tell the user you will report back.`;
+
+const inBackground =
+  "You are running as a background task: the user is not here to answer questions, so decide for yourself and report what you did.";
+
+export function startWorker(deps: Deps): Worker {
   const { db } = deps;
-  const perform = (event: InboxEvent) => performStep(deps, event, wake);
-  const wake: Record<Step, () => void> = {
-    command: oneAtATimePer(() => schedulesWaitingForCommand(db), (name) => nextCommand(db, name), perform),
-    agent: oneAtATime(() => nextAt(db, "agent"), perform),
-    voice: oneAtATime(() => nextAt(db, "voice"), perform),
+  const running = new Map<number, AbortController>();
+  const perform = async (event: InboxEvent) => {
+    await performStep(deps, event, running);
+    wake();
   };
-  return () => Object.values(wake).forEach((nudge) => nudge());
+  const next = (step: Step) => () => nextAt(db, step, Date.now());
+  const lanes = [
+    oneAtATimePer(() => schedulesWaitingForCommand(db), (name) => nextCommand(db, name), perform),
+    oneAtATime(next("agent"), perform),
+    oneAtATime(next("background"), perform),
+    oneAtATime(next("voice"), perform),
+  ];
+  const wake = () => lanes.forEach((nudge) => nudge());
+  return { wake, cancel: (eventId) => running.get(eventId)?.abort() };
 }
 
 function oneAtATime(next: () => InboxEvent | undefined, perform: (event: InboxEvent) => Promise<void>): () => void {
@@ -74,19 +93,21 @@ function oneAtATimePer(
   };
 }
 
-async function performStep(deps: Deps, event: InboxEvent, wake: Record<Step, () => void>): Promise<void> {
+async function performStep(deps: Deps, event: InboxEvent, running: Map<number, AbortController>): Promise<void> {
   const { db } = deps;
   markRunning(db, event.id, Date.now());
+  if (event.step === "background") deps.onStarted(getEvent(db, event.id) ?? event);
+  const controller = new AbortController();
+  running.set(event.id, controller);
   try {
-    const done = await work[event.step](event, deps);
+    const done = await work[event.step](event, deps, controller.signal);
     const next = stepAfter(event);
-    if (next) {
-      handOff(db, event.id, next, done);
-      return wake[next]();
-    }
+    if (next) return handOff(db, event.id, next, done);
     markDone(db, event.id, done, Date.now());
   } catch (error) {
     markFailed(db, event.id, (error as Error).message, Date.now());
+  } finally {
+    running.delete(event.id);
   }
   deps.onFinished(getEvent(db, event.id) ?? event);
 }
@@ -97,19 +118,48 @@ const work: Record<Step, Work> = {
     const output = await runScript({ ...job, env: { MEI_LAST_RUN: lastRunText(deps.db, job) }, logFile: logFileOf(event) });
     return { output, topic: job.name };
   },
-  agent: (event, deps) => {
+  agent: (event, deps, signal) => {
     const agentWork = agentWorkByType[event.type];
     if (!agentWork) throw new Error(`No handler for event type "${event.type}"`);
-    return agentWork(event, deps);
+    return agentWork(event, deps, signal);
+  },
+  background: async (event, deps, signal) => {
+    const { text, role: roleName, folder } = event.payload as BackgroundTask;
+    const role = findRole(deps.config, roleName);
+    const sessionId = randomUUID();
+    const topic = firstWords(text);
+    const context = contextFor(undefined, shortTermMemory(deps.db));
+    const { ok, response, error } = await deps.run({
+      prompt: text,
+      cwd: folder,
+      sessionId,
+      sessionDir: chatSessionsDir,
+      model: role.model,
+      appendSystemPrompt: [context, inBackground].filter(Boolean).join("\n\n"),
+      logFile: logFileOf(event),
+      timeoutMinutes: deps.config.background.timeoutMinutes,
+      signal,
+    });
+    if (!ok) throw new Error(response ? `${error}\n\nWhat it had so far:\n${response}` : error);
+    const now = Date.now();
+    recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
+    setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
+    deps.rearm();
+    return { output: response, sessionId, topic: `${topic} · ${role.name}` };
   },
   voice: async (event, deps) => {
-    const about =
-      event.type === "user.message"
-        ? { message: (event.payload as { text: string }).text }
-        : { schedule: (event.payload as ScheduledJob).name };
-    return { output: await voice(deps, { ...about, answer: event.handoff ?? "", logFile: logFileOf(event) }) };
+    const answer = event.handoff ?? (event.payload as BackgroundTask).text;
+    return { output: await voice(deps, { about: aboutOf(event), answer, logFile: logFileOf(event) }) };
   },
 };
+
+function aboutOf({ type, payload, runAt }: InboxEvent): About {
+  if (type === "user.message") return { message: (payload as { text: string }).text };
+  if (type === "timer.fired") return { schedule: (payload as ScheduledJob).name };
+  const { text, say } = payload as BackgroundTask;
+  if (!say) return { task: text };
+  return { reminder: true, minutesLate: Math.max(0, Math.round((Date.now() - (runAt ?? Date.now())) / 60_000)) };
+}
 
 const agentWorkByType: Record<string, Work | undefined> = {
   "user.message": async (event, deps) => {
@@ -128,7 +178,7 @@ const agentWorkByType: Record<string, Work | undefined> = {
       sessionId,
       sessionDir: chatSessionsDir,
       model: role.model,
-      appendSystemPrompt: context,
+      appendSystemPrompt: [context, backgroundHint].filter(Boolean).join("\n\n"),
       logFile,
       onLine,
     });

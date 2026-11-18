@@ -6,6 +6,7 @@ import { z } from "zod";
 import { home } from "./paths.ts";
 
 const defaultTimeoutMinutes = 10;
+const defaultBackgroundTimeoutMinutes = 30;
 
 const text = z.string({ error: "must be a string" });
 const flag = z.boolean({ error: "must be true or false" });
@@ -79,13 +80,16 @@ const configTables = table({
   character: table({ name: text, file: text.default("CHARACTER.md"), enabled: flag, model: text }),
   idle: table({ after_minutes: positiveNumber, model: text }),
   dream: table({ daily_at: timeOfDay, model: text }),
+  background: table({ timeout_minutes: positiveNumber.default(defaultBackgroundTimeoutMinutes) }).default({
+    timeout_minutes: defaultBackgroundTimeoutMinutes,
+  }),
   schedule: z.array(scheduleTable, { error: "must be written as [[schedule]]" }).default([]),
 });
 
 class BrokenRule extends Error {}
 
 function settings(
-  { roles, router, character, idle, dream, schedule }: z.output<typeof configTables>,
+  { roles, router, character, idle, dream, background, schedule }: z.output<typeof configTables>,
   fail: (path: PropertyKey[]) => Fail,
 ) {
   const models = new Map(Object.entries(roles).map(([name, { model }]) => [name, model]));
@@ -111,6 +115,7 @@ function settings(
     character: { ...character, file: characterFile },
     idle: { afterMinutes: idle.after_minutes, model: idle.model },
     dream: { spec: { daily_at: dream.daily_at }, model: dream.model },
+    background: { timeoutMinutes: background.timeout_minutes },
     schedules,
   };
 }

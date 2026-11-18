@@ -1,7 +1,9 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ScheduledJob } from "./config.ts";
 
-export type Step = "command" | "agent" | "voice";
+export type Step = "command" | "agent" | "background" | "voice";
+
+export type BackgroundTask = { text: string; say: boolean; role: string; folder: string };
 
 export type InboxEvent = {
   id: number;
@@ -18,14 +20,16 @@ export type InboxEvent = {
   createdAt: number;
   startedAt: number | null;
   finishedAt: number | null;
+  runAt: number | null;
 };
 
-type NewEvent = Pick<InboxEvent, "type" | "payload">;
+type NewEvent = Pick<InboxEvent, "type" | "payload"> & { runAt?: number };
 export type StepOutput = { output: string; sessionId?: string; topic?: string };
 
-export function stepsOf({ type, payload }: NewEvent): Step[] {
+export function stepsOf({ type, payload }: Pick<InboxEvent, "type" | "payload">): Step[] {
   if (type === "user.message") return ["agent", "voice"];
   if (type === "session.idle" || type === "dream") return ["agent"];
+  if (type === "task.background") return (payload as BackgroundTask).say ? ["voice"] : ["background", "voice"];
   const job = payload as ScheduledJob;
   return [
     ...("command" in job ? (["command"] as const) : []),
@@ -42,7 +46,7 @@ export function stepAfter(event: InboxEvent): Step | undefined {
 const selectEvents = `
   SELECT id, type, payload, status, step, handoff, attempts,
     session_id AS sessionId, topic, result, error,
-    created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt
+    created_at AS createdAt, started_at AS startedAt, finished_at AS finishedAt, run_at AS runAt
   FROM events`;
 
 function findEvents(db: DatabaseSync, where: string, ...params: (string | number)[]): InboxEvent[] {
@@ -54,19 +58,42 @@ function findEvents(db: DatabaseSync, where: string, ...params: (string | number
 
 export function addEvent(db: DatabaseSync, event: NewEvent, now: number): number {
   const { lastInsertRowid } = db
-    .prepare(`INSERT INTO events (id, type, payload, status, step, created_at)
+    .prepare(`INSERT INTO events (id, type, payload, status, step, created_at, run_at)
       SELECT COALESCE(MAX(id), (SELECT CAST(value AS INTEGER) FROM kv WHERE key = 'eventId'), 0) + 1,
-        ?, ?, 'pending', ?, ? FROM events`)
-    .run(event.type, JSON.stringify(event.payload), stepsOf(event)[0], now);
+        ?, ?, 'pending', ?, ?, ? FROM events`)
+    .run(event.type, JSON.stringify(event.payload), stepsOf(event)[0], now, event.runAt ?? null);
   return Number(lastInsertRowid);
 }
 
-export function nextAt(db: DatabaseSync, step: Step): InboxEvent | undefined {
+const anyEvent = (where: string) => `EXISTS (SELECT 1 FROM events WHERE ${where})`;
+
+const mayStart: Record<Step, string> = {
+  command: "TRUE",
+  agent: `NOT (type = 'dream' AND ${anyEvent("status = 'running' AND step = 'background'")})`,
+  background: `NOT ${anyEvent("status = 'running' AND type = 'dream'")}`,
+  voice: `(type = 'user.message' OR NOT ${anyEvent("type = 'user.message' AND status IN ('pending', 'running') AND step = 'agent'")})`,
+};
+
+export function nextAt(db: DatabaseSync, step: Step, now: number): InboxEvent | undefined {
   return findEvents(
     db,
-    "WHERE status = 'pending' AND step = ? ORDER BY type = 'user.message' DESC, id LIMIT 1",
+    `WHERE status = 'pending' AND step = ? AND (run_at IS NULL OR run_at <= ?) AND ${mayStart[step]}
+     ORDER BY type = 'user.message' DESC, id LIMIT 1`,
     step,
+    now,
   )[0];
+}
+
+export function earliestWaiting(db: DatabaseSync, now: number): number | undefined {
+  const row = db.prepare("SELECT MIN(run_at) AS at FROM events WHERE status = 'pending' AND run_at > ?").get(now);
+  return row?.at === null || row?.at === undefined ? undefined : Number(row.at);
+}
+
+export function backgroundTasks(db: DatabaseSync): InboxEvent[] {
+  return findEvents(
+    db,
+    "WHERE type = 'task.background' AND status IN ('pending', 'running') ORDER BY COALESCE(run_at, created_at), id",
+  );
 }
 
 const scheduleName = "json_extract(payload, '$.name')";
@@ -149,6 +176,7 @@ export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
     db,
     `WHERE (finished_at, id) > (COALESCE((SELECT finished_at FROM events WHERE id = ?), 0), ?) AND (
        status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
+       OR status IN ('done', 'failed') AND type = 'task.background'
        OR status = 'failed' AND type = 'dream'
      )
      ORDER BY finished_at, id`,
@@ -159,7 +187,8 @@ export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
 
 export type Said =
   | { minutesAgo: number; topic: string; message: string; reply: string }
-  | { minutesAgo: number; schedule: string; result: string };
+  | { minutesAgo: number; schedule: string; result: string }
+  | { minutesAgo: number; task: string; result: string };
 
 const saidLength = 1000;
 
@@ -170,16 +199,22 @@ function cut(text: string): string {
 export function recentlySaid(db: DatabaseSync, limit: number, now: number): Said[] {
   return findEvents(
     db,
-    `WHERE status = 'done' AND (type = 'user.message' OR (type = 'timer.fired' AND json_extract(payload, '$.notify')))
+    `WHERE status = 'done' AND (
+       type IN ('user.message', 'task.background') OR (type = 'timer.fired' AND json_extract(payload, '$.notify'))
+     )
      ORDER BY finished_at DESC LIMIT ?`,
     limit,
   )
     .reverse()
     .map(({ type, payload, topic, result, finishedAt }) => {
       const minutesAgo = Math.round((now - (finishedAt ?? now)) / 60_000);
-      return type === "user.message"
-        ? { minutesAgo, topic: topic ?? "", message: cut((payload as { text: string }).text), reply: cut(result ?? "") }
-        : { minutesAgo, schedule: topic ?? "", result: cut(result ?? "") };
+      if (type === "user.message") {
+        return { minutesAgo, topic: topic ?? "", message: cut((payload as { text: string }).text), reply: cut(result ?? "") };
+      }
+      if (type === "task.background") {
+        return { minutesAgo, task: cut((payload as BackgroundTask).text), result: cut(result ?? "") };
+      }
+      return { minutesAgo, schedule: topic ?? "", result: cut(result ?? "") };
     });
 }
 

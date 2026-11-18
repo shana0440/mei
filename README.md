@@ -19,7 +19,7 @@ npm run chat -- --debug "hi"    # also show where the message went and the work 
 npm run status                  # list pending, running and recent messages, and the sessions in short-term memory
 ```
 
-mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt, a closing session being summarized or [dream](#dream) is in progress. [Command schedules](#schedules) need no agent and run alongside.
+mei does one agent run at a time, oldest first: a message waits while an earlier message, a scheduled prompt, a closing session being summarized or [dream](#dream) is in progress. [Command schedules](#schedules) need no agent and run alongside, and so do [background tasks](#background-tasks), one at a time in a lane of their own.
 
 mei keeps one session per task. For every message it looks at the last 10 messages, the way you see them in a chat, and decides whether you are following up on one of them or starting a new task. It prints the session's topic and role in brackets before the answer:
 
@@ -95,7 +95,7 @@ Both `mei config` and `set` check the result the same way the daemon does before
 
 If you edit `config.toml` yourself, run `mei reload` (or `npm run reload`) to apply the changes without restarting the daemon. Invalid configuration reports an error and leaves the current settings and timers unchanged.
 
-Reload updates roles, models, character settings, idle timeouts, the dream time and schedules. Unchanged schedule times are preserved; changed intervals start from the reload time. Active idle timers are adjusted to the new timeout. Work already running finishes with its original settings; queued work uses the new settings. Already queued scheduled runs keep their original schedule payload.
+Reload updates roles, models, character settings, idle timeouts, the dream time, the background timeout and schedules. Unchanged schedule times are preserved; changed intervals start from the reload time. Active idle timers are adjusted to the new timeout. Work already running finishes with its original settings; queued work uses the new settings. Already queued scheduled runs keep their original schedule payload.
 
 `AGENTS.md`, `CHARACTER.md`, `PROJECTS.md`, skills and prompt files are read on each relevant agent run, so edits need no restart or reload. A running agent is not interrupted, and reload does not clear session history or memory. Changes to `MEI_HOME`, the service environment or daemon code still require a restart.
 
@@ -125,6 +125,9 @@ model = "anthropic/claude-haiku-5-5"   # model that summarizes a closed session
 [dream]
 daily_at = "03:00"       # local time HH:MM when the day's summaries are written into memory/
 model = "anthropic/claude-haiku-5-5"   # model that writes them
+
+[background]
+timeout_minutes = 30     # stop a background task running longer than this and send its error; left out means 30
 ```
 
 Each message goes through up to three runs:
@@ -226,17 +229,37 @@ npm run schedule -- remove standup      # delete its block; its script or prompt
 
 A disabled schedule has `enabled = false` in its block. It never fires on its own, and runs it missed while disabled are not made up, but `npm run job -- <name>` still runs it. Enabling it again schedules its next run from then.
 
-## Receiving results
+## Background tasks
 
-A program receives the result of each scheduled run as it finishes by subscribing to the daemon. `npm run listen` is such a subscriber: it prints every result as one JSON line, with the answer in `result`, or the reason in `error` when the run failed.
+Ask for something that takes a while ("gather today's papers on X"), or for something at a set time ("remind me to stretch at 15:00", "at 9:00, check whether my PR got reviews"), and the working agent hands it to a background task, following the `background` skill in the home. It answers that it will report back, and you can keep talking about something else. The result comes through [`listen`](#receiving-results) when it is ready.
+
+A background task runs once. Without a time it starts now; with one it waits until then. It runs as a new session in the role and folder of the session that started it, so a follow-up on its result ("tell me more about the second one") continues that session, and it is summarized into memory like any other. A reminder is said as written, with no agent run. Something that repeats with no end is a [schedule](#schedules).
+
+The same command starts one by hand:
 
 ```sh
-npm run -s listen | while read -r event; do
+mei background add "<prompt>"                              # now
+mei background add --at 2026-01-31T09:00 "<prompt>"         # at a local time
+mei background add --at 2026-01-31T15:00 --say "Time to stretch"   # a reminder
+mei background list                                        # waiting, queued and running tasks
+mei background cancel 42                                   # drop a waiting task or stop a running one
+```
+
+Background tasks run one at a time, alongside chat. A run longer than `[background] timeout_minutes`, 30 by default, is stopped and fails with its error and what it had so far. Dream and a background task never run at the same time. A task due while the daemon was stopped runs when it starts, and a late reminder says it is late.
+
+## Receiving results
+
+A program receives the result of each scheduled run and background task as it finishes by subscribing to the daemon. `npm run listen` is such a subscriber: it prints every result as one JSON line, with the answer in `result`, or the reason in `error` when the run failed. When a background task starts, it also prints a line with `"status":"running"`, so a program can show what is running; the result of that task comes later on a line of its own.
+
+```sh
+npm run -s listen | jq --unbuffered -c 'select(.status != "running")' | while read -r event; do
   notify-send "mei" "$(jq -r '.result // .error' <<<"$event")"
 done
 ```
 
-With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation. A failed run sends its error as is.
+mei cannot alert you by itself: whatever subscribes is the alarm, so a reminder reaches you only through a subscriber like this one. `mei background add` warns when nothing is subscribed.
+
+With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation, and one that finishes while a message is waiting or being answered is held until the answer is sent. A failed run sends its error as is.
 
 A schedule with `notify = false` is left out and not voiced. Chat answers and session summaries are never sent. Dream is sent only when it fails, with its error, so you hear when memory could not be backed up or written.
 
@@ -259,6 +282,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run dream` | write the waiting summaries into memory now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 | `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
+| `npm run background -- <add\|list\|cancel>` | [run a task in the background](#background-tasks) |
 | `npm run config -- [get <key> \| set <key> <value>]` | [change settings](#configuration) |
 
 To keep the daemon running whenever you are logged in, and to chat from any directory, install it as a systemd user service with a `mei` command:
@@ -274,7 +298,7 @@ journalctl --user -u mei        # what the daemon printed
 
 `make install` runs `npm install`, then writes `~/.config/systemd/user/mei.service` and `~/.local/bin/mei` for this checkout, and starts the service (restarting it if it was already running). The service gets the `PATH` of the shell that ran `make install`, and mei can only use tools found on it. Run `make install` again after moving the checkout or changing where `node`, `git` and `pi-bolt` are installed.
 
-The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>`, `mei dream`, `mei listen [--after <event number>]` and `mei schedule ...` are also available. Run `mei --help` for usage.
+The `mei` subcommands talk to the running daemon over its Unix socket; they do not start another daemon. `mei chat` and `mei status` are the same clients as `npm run chat` and `npm run status`. `mei reset --yes` clears the daemon's memory, history, logs and inbox. `mei job <schedule name>`, `mei dream`, `mei listen [--after <event number>]`, `mei schedule ...` and `mei background ...` are also available. Run `mei --help` for usage.
 
 `make uninstall` stops the service and removes both files.
 

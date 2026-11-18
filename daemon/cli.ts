@@ -9,6 +9,7 @@ const usage = `Usage:
   mei dream
   mei listen [--after <event number>]
   mei schedule list|add|remove|enable|disable ...
+  mei background add|list|cancel ...
   mei config [get <key> | set <key> <value>]
 
 Connects to the running mei daemon; mei config also works while it is stopped.`;
@@ -21,7 +22,7 @@ await runCommand(async () => {
     console.log(usage);
     return;
   }
-  if (!["chat", "status", "reload", "reset", "job", "dream", "listen", "schedule", "config"].includes(command)) {
+  if (!["chat", "status", "reload", "reset", "job", "dream", "listen", "schedule", "background", "config"].includes(command)) {
     throw new Error(`Unknown command "${command}"\n\n${usage}`);
   }
   if ((command === "status" || command === "dream") && process.argv.length > 3) throw new Error(`Usage: mei ${command}`);

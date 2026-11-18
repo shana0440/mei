@@ -52,6 +52,7 @@ const migrations = [
   function forgetSummariesAlreadyInLongTermMemory(db: DatabaseSync) {
     db.exec("UPDATE sessions SET summary = NULL");
   },
+  "ALTER TABLE events ADD COLUMN run_at INTEGER",
 ];
 
 export function openDb(path: string): DatabaseSync {

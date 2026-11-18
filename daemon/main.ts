@@ -5,13 +5,22 @@ import { runCommand } from "./client.ts";
 import { loadConfig } from "./config.ts";
 import type { Config } from "./config.ts";
 import { openDb } from "./db.ts";
-import { addEvent, lastFinishedId, publishedAfter, recentEvents, recoverRunning } from "./inbox.ts";
-import type { InboxEvent } from "./inbox.ts";
+import {
+  addEvent,
+  backgroundTasks,
+  getEvent,
+  lastFinishedId,
+  markFailed,
+  publishedAfter,
+  recentEvents,
+  recoverRunning,
+} from "./inbox.ts";
+import type { BackgroundTask, InboxEvent } from "./inbox.ts";
 import { chatSessionsDir, configPath, dbPath, home, logsDir, memoryDir, notebooksDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
 import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
-import { shortTermMemory } from "./sessions.ts";
+import { findSession, shortTermMemory } from "./sessions.ts";
 import { startServer } from "./server.ts";
 import { listTimers, queueDream, syncTimers } from "./timers.ts";
 import { startWorker } from "./worker.ts";
@@ -31,6 +40,7 @@ await runCommand(async () => {
     run,
     rearm: () => rearm(),
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
+    onStarted: (event) => progress.emit("started", event),
     onFinished: (event) => {
       progress.emit(`finished:${event.id}`, event);
       progress.emit("finished");
@@ -38,9 +48,10 @@ await runCommand(async () => {
   };
   recoverRunning(db, maxAttempts, Date.now());
   syncTimers(db, config, Date.now());
-  const wake = startWorker(deps);
+  const { wake, cancel } = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
+  let listeners = 0;
 
   function apply(next: Config): void {
     db.exec("BEGIN");
@@ -92,9 +103,41 @@ await runCommand(async () => {
         }
       };
       progress.on("finished", publish);
+      progress.on("started", send);
+      listeners++;
       publish();
       await closed;
+      listeners--;
       progress.off("finished", publish);
+      progress.off("started", send);
+      return {};
+    },
+    task: ({ text, at, say, fromSession }) => {
+      const now = Date.now();
+      if (at !== undefined && at < now - 60_000) throw new Error(`${new Date(at).toLocaleString()} is in the past`);
+      const session = fromSession === undefined ? undefined : findSession(db, fromSession);
+      const payload: BackgroundTask = {
+        text,
+        say: say ?? false,
+        role: session?.role || config.router.defaultRole,
+        folder: session?.folder || home,
+      };
+      const eventId = addEvent(db, { type: "task.background", payload, runAt: at }, now);
+      rearm();
+      return { eventId, listening: listeners > 0 };
+    },
+    tasks: () => ({ tasks: backgroundTasks(db), timeoutMinutes: config.background.timeoutMinutes }),
+    cancel: ({ eventId }) => {
+      const event = getEvent(db, eventId);
+      if (event?.type !== "task.background") throw new Error(`No background task is numbered ${eventId}`);
+      if (event.status === "done" || event.status === "failed") throw new Error(`Background task #${eventId} has already finished`);
+      if (event.status === "pending") {
+        markFailed(db, eventId, "Cancelled", Date.now());
+        deps.onFinished(getEvent(db, eventId) ?? event);
+        return {};
+      }
+      if (event.step !== "background") throw new Error(`Background task #${eventId} is already reporting back`);
+      cancel(eventId);
       return {};
     },
     reload: () => {
