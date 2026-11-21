@@ -20,6 +20,10 @@ export type Requests = {
     message: { text: string; at?: number; say?: boolean; fromSession?: string };
     reply: { eventId: number; listening: boolean };
   };
+  watch: {
+    message: { command: string; folder: string; fromSession?: string };
+    reply: { eventId: number; listening: boolean };
+  };
   tasks: { message: {}; reply: { tasks: InboxEvent[]; timeoutMinutes: number } };
   cancel: { message: { eventId: number }; reply: {} };
 };

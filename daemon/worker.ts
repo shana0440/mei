@@ -6,6 +6,7 @@ import type { Config, ScheduledJob } from "./config.ts";
 import {
   getEvent,
   handOff,
+  keepSession,
   lastRun,
   markDone,
   markFailed,
@@ -14,15 +15,24 @@ import {
   nextCommand,
   schedulesWaitingForCommand,
   stepAfter,
+  waitingAt,
 } from "./inbox.ts";
 import type { BackgroundTask, InboxEvent, Step, StepOutput } from "./inbox.ts";
 import { commitMemory } from "./memory.ts";
 import { backgroundSkillPath, chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { contextFor, findRole, firstWords, route } from "./router.ts";
-import { runScript } from "./script.ts";
+import { describeEnd, maxScriptAttempts, runScript, scriptFiles, watchScript } from "./script.ts";
+import type { ScriptTask } from "./script.ts";
 import type { run } from "./runner.ts";
-import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
+import {
+  describeSummaries,
+  findSession,
+  forgetSummaries,
+  recordActivity,
+  saveSummary,
+  shortTermMemory,
+} from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 import { voice } from "./voice.ts";
 import type { About } from "./voice.ts";
@@ -43,12 +53,17 @@ type Work = (event: InboxEvent, deps: Deps, signal: AbortSignal) => Promise<Step
 type CommandJob = Extract<ScheduledJob, { command: string }>;
 type PromptJob = Extract<ScheduledJob, { prompt: string }>;
 
+const watchHint = `Never leave a process running when your turn ends. Start a script that runs longer than a few minutes with \`mei background watch\` as ${backgroundSkillPath} says: mei watches it and wakes you with how it ended.`;
+
 const backgroundHint = `## Background tasks
 
-When a task will take more than a few minutes, or the user wants something done or said at a later time, follow ${backgroundSkillPath} to hand it to a background task, then tell the user you will report back.`;
+When a task will take more than a few minutes, or the user wants something done or said at a later time, follow ${backgroundSkillPath} to hand it to a background task, then tell the user you will report back.
 
-const inBackground =
-  "You are running as a background task: the user is not here to answer questions, so decide for yourself and report what you did.";
+${watchHint}`;
+
+const inBackground = `You are running as a background task: the user is not here to answer questions, so decide for yourself and report what you did.
+
+${watchHint}`;
 
 export function startWorker(deps: Deps): Worker {
   const { db } = deps;
@@ -63,6 +78,7 @@ export function startWorker(deps: Deps): Worker {
     oneAtATime(next("agent"), perform),
     oneAtATime(next("background"), perform),
     oneAtATime(next("voice"), perform),
+    () => waitingAt(db, "script", Date.now()).forEach(perform),
   ];
   const wake = () => lanes.forEach((nudge) => nudge());
   return { wake, cancel: (eventId) => running.get(eventId)?.abort() };
@@ -96,7 +112,7 @@ function oneAtATimePer(
 async function performStep(deps: Deps, event: InboxEvent, running: Map<number, AbortController>): Promise<void> {
   const { db } = deps;
   markRunning(db, event.id, Date.now());
-  if (event.step === "background") deps.onStarted(getEvent(db, event.id) ?? event);
+  if (event.step === "background" || event.step === "script") deps.onStarted(getEvent(db, event.id) ?? event);
   const controller = new AbortController();
   running.set(event.id, controller);
   try {
@@ -118,6 +134,11 @@ const work: Record<Step, Work> = {
     const output = await runScript({ ...job, env: { MEI_LAST_RUN: lastRunText(deps.db, job) }, logFile: logFileOf(event) });
     return { output, topic: job.name };
   },
+  script: async (event, _deps, signal) => {
+    const files = scriptFiles(event.id);
+    const status = await watchScript(event.payload as ScriptTask, files, signal);
+    return { output: describeEnd(status, Date.now() - (event.startedAt ?? Date.now()), files) };
+  },
   agent: (event, deps, signal) => {
     const agentWork = agentWorkByType[event.type];
     if (!agentWork) throw new Error(`No handler for event type "${event.type}"`);
@@ -127,6 +148,7 @@ const work: Record<Step, Work> = {
     const { text, role: roleName, folder } = event.payload as BackgroundTask;
     const role = findRole(deps.config, roleName);
     const sessionId = randomUUID();
+    keepSession(deps.db, event.id, { sessionId });
     const topic = firstWords(text);
     const context = contextFor(undefined, shortTermMemory(deps.db));
     const { ok, response, error } = await deps.run({
@@ -156,6 +178,7 @@ const work: Record<Step, Work> = {
 function aboutOf({ type, payload, runAt }: InboxEvent): About {
   if (type === "user.message") return { message: (payload as { text: string }).text };
   if (type === "timer.fired") return { schedule: (payload as ScheduledJob).name };
+  if (type === "task.script") return { script: (payload as ScriptTask).command };
   const { text, say } = payload as BackgroundTask;
   if (!say) return { task: text };
   return { reminder: true, minutesLate: Math.max(0, Math.round((Date.now() - (runAt ?? Date.now())) / 60_000)) };
@@ -185,6 +208,35 @@ const agentWorkByType: Record<string, Work | undefined> = {
     if (!ok) throw new Error(error);
     const now = Date.now();
     recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
+    setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
+    deps.rearm();
+    return { output: response, sessionId, topic: `${topic} · ${role.name}` };
+  },
+  "task.script": async (event, deps, signal) => {
+    const { command, folder, sessionId, attempt } = event.payload as ScriptTask;
+    const session = findSession(deps.db, sessionId);
+    const role = findRole(deps.config, session?.role);
+    const topic = session?.topic ?? firstWords(command);
+    const sessionFolder = session?.folder || home;
+    const context = session?.context ?? contextFor(undefined, shortTermMemory(deps.db));
+    const next =
+      attempt < maxScriptAttempts
+        ? `If it did not, find out why, fix it, and start it again with \`mei background watch\`, never in the foreground, which mei allows ${maxScriptAttempts - attempt} more times.`
+        : "mei will not start it again, so if it did not, say why and what you would try next.";
+    const { ok, response, error } = await deps.run({
+      prompt: `The script you started with \`mei background watch\` has ended: \`${command}\`, run in ${folder}. ${event.handoff}\n\nCheck whether it did what it was meant to do. ${next} Then report to the user what came of it.`,
+      cwd: sessionFolder,
+      sessionId,
+      sessionDir: chatSessionsDir,
+      model: role.model,
+      appendSystemPrompt: [context, inBackground].filter(Boolean).join("\n\n"),
+      logFile: logFileOf(event),
+      timeoutMinutes: deps.config.background.timeoutMinutes,
+      signal,
+    });
+    if (!ok) throw new Error(response ? `${error}\n\nWhat it had so far:\n${response}` : error);
+    const now = Date.now();
+    recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder: sessionFolder, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
     deps.rearm();
     return { output: response, sessionId, topic: `${topic} · ${role.name}` };

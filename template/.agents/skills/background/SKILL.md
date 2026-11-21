@@ -1,6 +1,6 @@
 ---
 name: background
-description: Hand a task to a background run that reports back when done, now or at a set time, or have a reminder said at a set time. Use when a task will take more than a few minutes, or the user wants something done or said later.
+description: Hand a task to a background run that reports back when done, now or at a set time, have a reminder said at a set time, or have mei watch a long script. Use when a task will take more than a few minutes, the user wants something done or said later, or a script you start will run longer than a few minutes.
 ---
 
 # Background
@@ -16,4 +16,14 @@ A background task runs once, as a new session in this session's role and folder,
    `<time>` is local time as `YYYY-MM-DDTHH:MM`. Work it out from the user's words and `date`; for "in 20 minutes", use `date -d '+20 minutes' +%Y-%m-%dT%H:%M`. For several times, such as "for the next two days", add one task per time. Something that repeats with no end is a schedule: follow the `schedule` skill in place of this one.
 3. Answer the user: what will run and when, and that the result comes on its own. If the command warns that nothing is listening, tell the user the result waits until something listens with `mei listen`, so a reminder will not reach them by itself.
 
-`mei background list` shows waiting, queued and running tasks with their numbers. `mei background cancel <number>` drops a waiting task or stops a running one. A run longer than `[background] timeout_minutes` in `config.toml` is stopped and its error is sent to the user.
+## Long scripts
+
+Never leave a process running when your turn ends (`&`, `nohup`, `setsid`): nobody would notice it fail or finish. A script that runs longer than a few minutes, such as training a model or processing many large files, is for mei to watch:
+
+```sh
+mei background watch "<command>"
+```
+
+mei runs it with `sh -c` in the current folder with no time limit, writes its output to the file the command prints, and keeps it running when the daemon restarts. When it ends, successfully or not, mei wakes this session with its exit status and the end of its output. Then check whether it did what it was meant to do; if not, fix it and watch it again, and report what came of it. Tell the user it is running and that the result comes on its own.
+
+`mei background list` shows waiting, queued and running tasks with their numbers. `mei background cancel <number>` drops a waiting task or stops a running one or a watched script. A run longer than `[background] timeout_minutes` in `config.toml` is stopped and its error is sent to the user.

@@ -1,4 +1,5 @@
 import { EventEmitter, once } from "node:events";
+import { randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { runCommand } from "./client.ts";
@@ -14,10 +15,13 @@ import {
   publishedAfter,
   recentEvents,
   recoverRunning,
+  takingOverScript,
 } from "./inbox.ts";
 import type { BackgroundTask, InboxEvent } from "./inbox.ts";
 import { chatSessionsDir, configPath, dbPath, home, logsDir, memoryDir, notebooksDir, socketPath, templateDir } from "./paths.ts";
 import { run } from "./runner.ts";
+import { maxScriptAttempts } from "./script.ts";
+import type { ScriptTask } from "./script.ts";
 import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
 import { findSession, shortTermMemory } from "./sessions.ts";
@@ -126,17 +130,29 @@ await runCommand(async () => {
       rearm();
       return { eventId, listening: listeners > 0 };
     },
+    watch: ({ command, folder, fromSession }) => {
+      const sessionId = fromSession ?? randomUUID();
+      const takingOver = takingOverScript(db, sessionId)?.payload as ScriptTask | undefined;
+      const attempt = (takingOver?.attempt ?? 0) + 1;
+      if (attempt > maxScriptAttempts) {
+        throw new Error(`This script was started ${maxScriptAttempts} times already; report to the user instead of starting it again`);
+      }
+      const payload: ScriptTask = { command, folder, sessionId, attempt };
+      const eventId = addEvent(db, { type: "task.script", payload }, Date.now());
+      wake();
+      return { eventId, listening: listeners > 0 };
+    },
     tasks: () => ({ tasks: backgroundTasks(db), timeoutMinutes: config.background.timeoutMinutes }),
     cancel: ({ eventId }) => {
       const event = getEvent(db, eventId);
-      if (event?.type !== "task.background") throw new Error(`No background task is numbered ${eventId}`);
+      if (event?.type !== "task.background" && event?.type !== "task.script") throw new Error(`No background task is numbered ${eventId}`);
       if (event.status === "done" || event.status === "failed") throw new Error(`Background task #${eventId} has already finished`);
       if (event.status === "pending") {
         markFailed(db, eventId, "Cancelled", Date.now());
         deps.onFinished(getEvent(db, eventId) ?? event);
         return {};
       }
-      if (event.step !== "background") throw new Error(`Background task #${eventId} is already reporting back`);
+      if (event.step !== "background" && event.step !== "script") throw new Error(`Background task #${eventId} is already reporting back`);
       cancel(eventId);
       return {};
     },

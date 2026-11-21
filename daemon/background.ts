@@ -1,13 +1,21 @@
 import { parseArgs } from "node:util";
 import { request, runCommand } from "./client.ts";
 import type { BackgroundTask, InboxEvent } from "./inbox.ts";
+import { elapsed, lastOutput, scriptFiles } from "./script.ts";
+import type { ScriptTask } from "./script.ts";
 
 const usage = `Usage:
   mei background add [--at <time>] [--say] "<prompt>"
+  mei background watch "<command>"
   mei background list
   mei background cancel <number>
 
---at takes a local time such as 2026-01-31T10:00; --say says the text at that time instead of running it.`;
+--at takes a local time such as 2026-01-31T10:00; --say says the text at that time instead of running it.
+watch runs the command in this folder with no time limit, then wakes the session that started it with how it ended.`;
+
+function cut(line: string): string {
+  return line.length > 80 ? `${line.slice(0, 80)}…` : line;
+}
 
 function at(text: string | undefined): number | undefined {
   if (text === undefined) return undefined;
@@ -16,7 +24,11 @@ function at(text: string | undefined): number | undefined {
   return time;
 }
 
-function state({ status, runAt, startedAt }: InboxEvent, timeoutMinutes: number): string {
+function state({ id, status, step, runAt, startedAt }: InboxEvent, timeoutMinutes: number): string {
+  if (status === "running" && step === "script" && startedAt !== null) {
+    const printed = lastOutput(scriptFiles(id).output, 1000).split("\n").pop();
+    return `running for ${elapsed(Date.now() - startedAt)}${printed ? `, last printed: ${cut(printed)}` : ""}`;
+  }
   if (status === "running" && startedAt !== null) {
     const stopsAt = new Date(startedAt + timeoutMinutes * 60_000);
     return `running since ${new Date(startedAt).toLocaleTimeString()}, stops at ${stopsAt.toLocaleTimeString()}`;
@@ -26,10 +38,14 @@ function state({ status, runAt, startedAt }: InboxEvent, timeoutMinutes: number)
   return "queued";
 }
 
-function what(event: InboxEvent): string {
-  const { text, say } = event.payload as BackgroundTask;
-  const line = text.split("\n")[0];
-  return `${say ? "say " : ""}${line.length > 80 ? `${line.slice(0, 80)}…` : line}`;
+function what({ type, payload }: InboxEvent): string {
+  if (type === "task.script") return `watch ${cut((payload as ScriptTask).command)}`;
+  const { text, say } = payload as BackgroundTask;
+  return `${say ? "say " : ""}${cut(text.split("\n")[0])}`;
+}
+
+function warnIfNobodyListens(listening: boolean): void {
+  if (!listening) console.error("Nothing is listening for results right now; this one is kept until mei listen connects.");
 }
 
 await runCommand(async () => {
@@ -49,7 +65,20 @@ await runCommand(async () => {
       fromSession: process.env.PI_SESSION_ID,
     });
     console.log(values.at === undefined ? `Queued as #${eventId}` : `Waiting as #${eventId}`);
-    if (!listening) console.error("Nothing is listening for results right now; this one is kept until mei listen connects.");
+    warnIfNobodyListens(listening);
+    return;
+  }
+  if (action === "watch") {
+    const { positionals } = parseArgs({ args, allowPositionals: true, options: {} });
+    if (positionals.length !== 1) throw new Error(usage);
+    const { eventId, listening } = await request({
+      type: "watch",
+      command: positionals[0],
+      folder: process.cwd(),
+      fromSession: process.env.PI_SESSION_ID,
+    });
+    console.log(`Watching as #${eventId}; its output goes to ${scriptFiles(eventId).output}`);
+    warnIfNobodyListens(listening);
     return;
   }
   if (action === "list" && args.length === 0) {

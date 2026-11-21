@@ -1,7 +1,8 @@
 import type { DatabaseSync } from "node:sqlite";
 import type { ScheduledJob } from "./config.ts";
+import type { ScriptTask } from "./script.ts";
 
-export type Step = "command" | "agent" | "background" | "voice";
+export type Step = "command" | "script" | "agent" | "background" | "voice";
 
 export type BackgroundTask = { text: string; say: boolean; role: string; folder: string };
 
@@ -30,6 +31,7 @@ export function stepsOf({ type, payload }: Pick<InboxEvent, "type" | "payload">)
   if (type === "user.message") return ["agent", "voice"];
   if (type === "session.idle" || type === "dream") return ["agent"];
   if (type === "task.background") return (payload as BackgroundTask).say ? ["voice"] : ["background", "voice"];
+  if (type === "task.script") return ["script", "agent", "voice"];
   const job = payload as ScheduledJob;
   return [
     ...("command" in job ? (["command"] as const) : []),
@@ -69,19 +71,28 @@ const anyEvent = (where: string) => `EXISTS (SELECT 1 FROM events WHERE ${where}
 
 const mayStart: Record<Step, string> = {
   command: "TRUE",
-  agent: `NOT (type = 'dream' AND ${anyEvent("status = 'running' AND step = 'background'")})`,
+  script: "TRUE",
+  agent: `NOT (type = 'dream' AND ${anyEvent("status = 'running' AND step = 'background'")})
+    AND NOT (type = 'task.script' AND EXISTS (SELECT 1 FROM events AS other
+      WHERE other.status = 'running' AND other.step = 'background'
+        AND other.session_id = json_extract(events.payload, '$.sessionId')))`,
   background: `NOT ${anyEvent("status = 'running' AND type = 'dream'")}`,
   voice: `(type = 'user.message' OR NOT ${anyEvent("type = 'user.message' AND status IN ('pending', 'running') AND step = 'agent'")})`,
 };
 
-export function nextAt(db: DatabaseSync, step: Step, now: number): InboxEvent | undefined {
+export function waitingAt(db: DatabaseSync, step: Step, now: number, limit = -1): InboxEvent[] {
   return findEvents(
     db,
     `WHERE status = 'pending' AND step = ? AND (run_at IS NULL OR run_at <= ?) AND ${mayStart[step]}
-     ORDER BY type = 'user.message' DESC, id LIMIT 1`,
+     ORDER BY type = 'user.message' DESC, id LIMIT ?`,
     step,
     now,
-  )[0];
+    limit,
+  );
+}
+
+export function nextAt(db: DatabaseSync, step: Step, now: number): InboxEvent | undefined {
+  return waitingAt(db, step, now, 1)[0];
 }
 
 export function earliestWaiting(db: DatabaseSync, now: number): number | undefined {
@@ -92,8 +103,18 @@ export function earliestWaiting(db: DatabaseSync, now: number): number | undefin
 export function backgroundTasks(db: DatabaseSync): InboxEvent[] {
   return findEvents(
     db,
-    "WHERE type = 'task.background' AND status IN ('pending', 'running') ORDER BY COALESCE(run_at, created_at), id",
+    `WHERE type IN ('task.background', 'task.script') AND status IN ('pending', 'running')
+     ORDER BY COALESCE(run_at, created_at), id`,
   );
+}
+
+export function takingOverScript(db: DatabaseSync, sessionId: string): InboxEvent | undefined {
+  return findEvents(
+    db,
+    `WHERE type = 'task.script' AND status = 'running' AND step = 'agent'
+       AND json_extract(payload, '$.sessionId') = ?`,
+    sessionId,
+  )[0];
 }
 
 const scheduleName = "json_extract(payload, '$.name')";
@@ -126,7 +147,7 @@ export function markRunning(db: DatabaseSync, id: number, now: number): void {
   ).run(now, id);
 }
 
-function keepSession(db: DatabaseSync, id: number, { sessionId, topic }: StepOutput): void {
+export function keepSession(db: DatabaseSync, id: number, { sessionId, topic }: Omit<StepOutput, "output">): void {
   db.prepare("UPDATE events SET session_id = COALESCE(?, session_id), topic = COALESCE(?, topic) WHERE id = ?").run(
     sessionId ?? null,
     topic ?? null,
@@ -155,7 +176,7 @@ export function markFailed(db: DatabaseSync, id: number, error: string, now: num
 export function recoverRunning(db: DatabaseSync, maxAttempts: number, now: number): void {
   db.prepare(
     `UPDATE events SET status = 'failed', error = 'Interrupted ' || attempts || ' times', finished_at = ?
-     WHERE status = 'running' AND attempts >= ?`,
+     WHERE status = 'running' AND step != 'script' AND attempts >= ?`,
   ).run(now, maxAttempts);
   db.exec("UPDATE events SET status = 'pending' WHERE status = 'running'");
 }
@@ -176,7 +197,7 @@ export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
     db,
     `WHERE (finished_at, id) > (COALESCE((SELECT finished_at FROM events WHERE id = ?), 0), ?) AND (
        status IN ('done', 'failed') AND type = 'timer.fired' AND json_extract(payload, '$.notify')
-       OR status IN ('done', 'failed') AND type = 'task.background'
+       OR status IN ('done', 'failed') AND type IN ('task.background', 'task.script')
        OR status = 'failed' AND type = 'dream'
      )
      ORDER BY finished_at, id`,
@@ -188,7 +209,8 @@ export function publishedAfter(db: DatabaseSync, id: number): InboxEvent[] {
 export type Said =
   | { minutesAgo: number; topic: string; message: string; reply: string }
   | { minutesAgo: number; schedule: string; result: string }
-  | { minutesAgo: number; task: string; result: string };
+  | { minutesAgo: number; task: string; result: string }
+  | { minutesAgo: number; script: string; result: string };
 
 const saidLength = 1000;
 
@@ -200,7 +222,7 @@ export function recentlySaid(db: DatabaseSync, limit: number, now: number): Said
   return findEvents(
     db,
     `WHERE status = 'done' AND (
-       type IN ('user.message', 'task.background') OR (type = 'timer.fired' AND json_extract(payload, '$.notify'))
+       type IN ('user.message', 'task.background', 'task.script') OR (type = 'timer.fired' AND json_extract(payload, '$.notify'))
      )
      ORDER BY finished_at DESC LIMIT ?`,
     limit,
@@ -213,6 +235,9 @@ export function recentlySaid(db: DatabaseSync, limit: number, now: number): Said
       }
       if (type === "task.background") {
         return { minutesAgo, task: cut((payload as BackgroundTask).text), result: cut(result ?? "") };
+      }
+      if (type === "task.script") {
+        return { minutesAgo, script: cut((payload as ScriptTask).command), result: cut(result ?? "") };
       }
       return { minutesAgo, schedule: topic ?? "", result: cut(result ?? "") };
     });
