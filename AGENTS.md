@@ -19,3 +19,8 @@ Every document here, this file included, is for someone new to the repo. Keep on
 - Check a change the way a user would.
 - When the check is done, clean up every file the check created.
 
+## Commits
+
+- One concern per commit.
+- The message is one imperative sentence that says what the commit adds or changes, in the style of conventional commits. Add a body only when the reason is not obvious from the diff.
+- A fix to something an earlier step built gets its own commit, before the commits of the current step.
