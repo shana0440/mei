@@ -21,6 +21,8 @@ Every document here, this file included, is for someone new to the repo. Keep on
 
 ## Commits
 
-- One concern per commit.
+- Before you start, list the steps of the change; each step is one concern and one commit.
+- Commit a step as soon as it works and is checked, before starting the next. Don't build a whole feature and split it afterwards.
+- If the message needs "and", or a body that lists several changes, the commit holds more than one concern: split it.
 - The message is one imperative sentence that says what the commit adds or changes, in the style of conventional commits. Add a body only when the reason is not obvious from the diff.
 - A fix to something an earlier step built gets its own commit, before the commits of the current step.
