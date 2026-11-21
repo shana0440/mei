@@ -243,11 +243,20 @@ The same command starts one by hand:
 mei background add "<prompt>"                              # now
 mei background add --at 2026-01-31T09:00 "<prompt>"         # at a local time
 mei background add --at 2026-01-31T15:00 --say "Time to stretch"   # a reminder
-mei background list                                        # waiting, queued and running tasks
+mei background watch "python train.py"                     # run a script and report how it ends
+mei background list                                        # waiting, queued and running tasks and scripts
 mei background cancel 42                                   # drop a waiting task or stop a running one
 ```
 
 Background tasks run one at a time, alongside chat. A run longer than `[background] timeout_minutes`, 30 by default, is stopped and fails with its error and what it had so far. Dream and a background task never run at the same time. A task due while the daemon was stopped runs when it starts, and a late reminder says it is late.
+
+### Watched scripts
+
+A long script, such as training a model or processing many large files, can be handed to mei with `mei background watch "<command>"` instead of being left running. mei runs it with `sh -c` in the folder the command was given in. Its output goes to `state/logs/<number>.output`, and `mei background list` shows how long it has run and the last line it printed. A watched script has no time limit, and several run side by side; `mei background cancel` stops one with everything it started.
+
+When the script ends, successfully or not, its exit status and the end of its output reach you through [`listen`](#receiving-results) like any background result.
+
+A watched script outlives the daemon: under the systemd service it runs in a scope of its own, so restarting mei does not stop it, and the daemon finds it again when it starts. A script that died without an exit status, such as in a reboot, is reported as stopped.
 
 ## Receiving results
 
@@ -284,7 +293,7 @@ The daemon is the one long-lived process: it holds the message queue, fires sche
 | `npm run dream` | write the waiting summaries into memory now |
 | `npm run listen` | print the result of each scheduled run as it finishes |
 | `npm run schedule -- <list\|add\|remove\|enable\|disable>` | [manage schedules](#managing-schedules) |
-| `npm run background -- <add\|list\|cancel>` | [run a task in the background](#background-tasks) |
+| `npm run background -- <add\|watch\|list\|cancel>` | [run a task or watch a script in the background](#background-tasks) |
 | `npm run config -- [get <key> \| set <key> <value>]` | [change settings](#configuration) |
 | `npm run update` | [replace home files with newer ones from the template](#home) |
 

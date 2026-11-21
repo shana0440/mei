@@ -14,13 +14,15 @@ import {
   nextCommand,
   schedulesWaitingForCommand,
   stepAfter,
+  waitingAt,
 } from "./inbox.ts";
 import type { BackgroundTask, InboxEvent, Step, StepOutput } from "./inbox.ts";
 import { commitMemory } from "./memory.ts";
 import { backgroundSkillPath, chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { contextFor, findRole, firstWords, route } from "./router.ts";
-import { runScript } from "./script.ts";
+import { describeEnd, runScript, scriptFiles, watchScript } from "./script.ts";
+import type { ScriptTask } from "./script.ts";
 import type { run } from "./runner.ts";
 import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
@@ -63,6 +65,7 @@ export function startWorker(deps: Deps): Worker {
     oneAtATime(next("agent"), perform),
     oneAtATime(next("background"), perform),
     oneAtATime(next("voice"), perform),
+    () => waitingAt(db, "script", Date.now()).forEach(perform),
   ];
   const wake = () => lanes.forEach((nudge) => nudge());
   return { wake, cancel: (eventId) => running.get(eventId)?.abort() };
@@ -96,7 +99,7 @@ function oneAtATimePer(
 async function performStep(deps: Deps, event: InboxEvent, running: Map<number, AbortController>): Promise<void> {
   const { db } = deps;
   markRunning(db, event.id, Date.now());
-  if (event.step === "background") deps.onStarted(getEvent(db, event.id) ?? event);
+  if (event.step === "background" || event.step === "script") deps.onStarted(getEvent(db, event.id) ?? event);
   const controller = new AbortController();
   running.set(event.id, controller);
   try {
@@ -117,6 +120,11 @@ const work: Record<Step, Work> = {
     const job = event.payload as CommandJob;
     const output = await runScript({ ...job, env: { MEI_LAST_RUN: lastRunText(deps.db, job) }, logFile: logFileOf(event) });
     return { output, topic: job.name };
+  },
+  script: async (event, _deps, signal) => {
+    const files = scriptFiles(event.id);
+    const status = await watchScript(event.payload as ScriptTask, files, signal);
+    return { output: describeEnd(status, Date.now() - (event.startedAt ?? Date.now()), files) };
   },
   agent: (event, deps, signal) => {
     const agentWork = agentWorkByType[event.type];
@@ -156,6 +164,7 @@ const work: Record<Step, Work> = {
 function aboutOf({ type, payload, runAt }: InboxEvent): About {
   if (type === "user.message") return { message: (payload as { text: string }).text };
   if (type === "timer.fired") return { schedule: (payload as ScheduledJob).name };
+  if (type === "task.script") return { script: (payload as ScriptTask).command };
   const { text, say } = payload as BackgroundTask;
   if (!say) return { task: text };
   return { reminder: true, minutesLate: Math.max(0, Math.round((Date.now() - (runAt ?? Date.now())) / 60_000)) };
