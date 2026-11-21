@@ -21,7 +21,7 @@ export type Requests = {
     reply: { eventId: number; listening: boolean };
   };
   watch: {
-    message: { command: string; folder: string };
+    message: { command: string; folder: string; fromSession?: string };
     reply: { eventId: number; listening: boolean };
   };
   tasks: { message: {}; reply: { tasks: InboxEvent[]; timeoutMinutes: number } };

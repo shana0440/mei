@@ -31,7 +31,7 @@ export function stepsOf({ type, payload }: Pick<InboxEvent, "type" | "payload">)
   if (type === "user.message") return ["agent", "voice"];
   if (type === "session.idle" || type === "dream") return ["agent"];
   if (type === "task.background") return (payload as BackgroundTask).say ? ["voice"] : ["background", "voice"];
-  if (type === "task.script") return ["script", "voice"];
+  if (type === "task.script") return ["script", "agent", "voice"];
   const job = payload as ScheduledJob;
   return [
     ...("command" in job ? (["command"] as const) : []),
@@ -72,7 +72,10 @@ const anyEvent = (where: string) => `EXISTS (SELECT 1 FROM events WHERE ${where}
 const mayStart: Record<Step, string> = {
   command: "TRUE",
   script: "TRUE",
-  agent: `NOT (type = 'dream' AND ${anyEvent("status = 'running' AND step = 'background'")})`,
+  agent: `NOT (type = 'dream' AND ${anyEvent("status = 'running' AND step = 'background'")})
+    AND NOT (type = 'task.script' AND EXISTS (SELECT 1 FROM events AS other
+      WHERE other.status = 'running' AND other.step = 'background'
+        AND other.session_id = json_extract(events.payload, '$.sessionId')))`,
   background: `NOT ${anyEvent("status = 'running' AND type = 'dream'")}`,
   voice: `(type = 'user.message' OR NOT ${anyEvent("type = 'user.message' AND status IN ('pending', 'running') AND step = 'agent'")})`,
 };
@@ -105,6 +108,15 @@ export function backgroundTasks(db: DatabaseSync): InboxEvent[] {
   );
 }
 
+export function takingOverScript(db: DatabaseSync, sessionId: string): InboxEvent | undefined {
+  return findEvents(
+    db,
+    `WHERE type = 'task.script' AND status = 'running' AND step = 'agent'
+       AND json_extract(payload, '$.sessionId') = ?`,
+    sessionId,
+  )[0];
+}
+
 const scheduleName = "json_extract(payload, '$.name')";
 
 export function schedulesWaitingForCommand(db: DatabaseSync): string[] {
@@ -135,7 +147,7 @@ export function markRunning(db: DatabaseSync, id: number, now: number): void {
   ).run(now, id);
 }
 
-function keepSession(db: DatabaseSync, id: number, { sessionId, topic }: StepOutput): void {
+export function keepSession(db: DatabaseSync, id: number, { sessionId, topic }: Omit<StepOutput, "output">): void {
   db.prepare("UPDATE events SET session_id = COALESCE(?, session_id), topic = COALESCE(?, topic) WHERE id = ?").run(
     sessionId ?? null,
     topic ?? null,

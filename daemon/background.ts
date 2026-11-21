@@ -11,7 +11,7 @@ const usage = `Usage:
   mei background cancel <number>
 
 --at takes a local time such as 2026-01-31T10:00; --say says the text at that time instead of running it.
-watch runs the command in this folder with no time limit and reports how it ended.`;
+watch runs the command in this folder with no time limit, then wakes the session that started it with how it ended.`;
 
 function cut(line: string): string {
   return line.length > 80 ? `${line.slice(0, 80)}…` : line;
@@ -75,6 +75,7 @@ await runCommand(async () => {
       type: "watch",
       command: positionals[0],
       folder: process.cwd(),
+      fromSession: process.env.PI_SESSION_ID,
     });
     console.log(`Watching as #${eventId}; its output goes to ${scriptFiles(eventId).output}`);
     warnIfNobodyListens(listening);

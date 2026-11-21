@@ -25,7 +25,7 @@ function task(about: About): string {
     return `A background task the user handed you earlier finished, and this is its result; "task" is what it was asked to do. ${asAside}`;
   }
   if ("script" in about) {
-    return `A script started earlier for the user ended, and this is how it ended; "script" is the command. ${asAside}`;
+    return `A script started earlier for the user ended, and the agent that started it checked how it went; "script" is the command. ${asAside}`;
   }
   return `The user asked you to tell them this at this time. If "minutesLate" is more than a few minutes, say it comes late. ${asAside}`;
 }

@@ -40,7 +40,9 @@ export async function runScript({ command, timeoutMinutes, env, logFile }: Scrip
   return stdout.trim();
 }
 
-export type ScriptTask = { command: string; folder: string };
+export const maxScriptAttempts = 3;
+
+export type ScriptTask = { command: string; folder: string; sessionId: string; attempt: number };
 export type ScriptFiles = { output: string; status: string; pid: string };
 
 const pollMs = 2000;

@@ -6,6 +6,7 @@ import type { Config, ScheduledJob } from "./config.ts";
 import {
   getEvent,
   handOff,
+  keepSession,
   lastRun,
   markDone,
   markFailed,
@@ -21,10 +22,17 @@ import { commitMemory } from "./memory.ts";
 import { backgroundSkillPath, chatSessionsDir, dreamPromptPath, home, logsDir, summarizePromptPath } from "./paths.ts";
 import { fillPrompt } from "./prompts.ts";
 import { contextFor, findRole, firstWords, route } from "./router.ts";
-import { describeEnd, runScript, scriptFiles, watchScript } from "./script.ts";
+import { describeEnd, maxScriptAttempts, runScript, scriptFiles, watchScript } from "./script.ts";
 import type { ScriptTask } from "./script.ts";
 import type { run } from "./runner.ts";
-import { describeSummaries, forgetSummaries, recordActivity, saveSummary, shortTermMemory } from "./sessions.ts";
+import {
+  describeSummaries,
+  findSession,
+  forgetSummaries,
+  recordActivity,
+  saveSummary,
+  shortTermMemory,
+} from "./sessions.ts";
 import { setIdleTimer } from "./timers.ts";
 import { voice } from "./voice.ts";
 import type { About } from "./voice.ts";
@@ -135,6 +143,7 @@ const work: Record<Step, Work> = {
     const { text, role: roleName, folder } = event.payload as BackgroundTask;
     const role = findRole(deps.config, roleName);
     const sessionId = randomUUID();
+    keepSession(deps.db, event.id, { sessionId });
     const topic = firstWords(text);
     const context = contextFor(undefined, shortTermMemory(deps.db));
     const { ok, response, error } = await deps.run({
@@ -194,6 +203,35 @@ const agentWorkByType: Record<string, Work | undefined> = {
     if (!ok) throw new Error(error);
     const now = Date.now();
     recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder, context, eventId: event.id }, now);
+    setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
+    deps.rearm();
+    return { output: response, sessionId, topic: `${topic} · ${role.name}` };
+  },
+  "task.script": async (event, deps, signal) => {
+    const { command, folder, sessionId, attempt } = event.payload as ScriptTask;
+    const session = findSession(deps.db, sessionId);
+    const role = findRole(deps.config, session?.role);
+    const topic = session?.topic ?? firstWords(command);
+    const sessionFolder = session?.folder || home;
+    const context = session?.context ?? contextFor(undefined, shortTermMemory(deps.db));
+    const next =
+      attempt < maxScriptAttempts
+        ? `If it did not, find out why, fix it, and start it again with \`mei background watch\`, never in the foreground, which mei allows ${maxScriptAttempts - attempt} more times.`
+        : "mei will not start it again, so if it did not, say why and what you would try next.";
+    const { ok, response, error } = await deps.run({
+      prompt: `The script you started with \`mei background watch\` has ended: \`${command}\`, run in ${folder}. ${event.handoff}\n\nCheck whether it did what it was meant to do. ${next} Then report to the user what came of it.`,
+      cwd: sessionFolder,
+      sessionId,
+      sessionDir: chatSessionsDir,
+      model: role.model,
+      appendSystemPrompt: [context, inBackground].filter(Boolean).join("\n\n"),
+      logFile: logFileOf(event),
+      timeoutMinutes: deps.config.background.timeoutMinutes,
+      signal,
+    });
+    if (!ok) throw new Error(response ? `${error}\n\nWhat it had so far:\n${response}` : error);
+    const now = Date.now();
+    recordActivity(deps.db, { id: sessionId, topic, role: role.name, folder: sessionFolder, context, eventId: event.id }, now);
     setIdleTimer(deps.db, sessionId, now + deps.config.idle.afterMinutes * 60_000);
     deps.rearm();
     return { output: response, sessionId, topic: `${topic} · ${role.name}` };
