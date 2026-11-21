@@ -53,12 +53,17 @@ type Work = (event: InboxEvent, deps: Deps, signal: AbortSignal) => Promise<Step
 type CommandJob = Extract<ScheduledJob, { command: string }>;
 type PromptJob = Extract<ScheduledJob, { prompt: string }>;
 
+const watchHint = `Never leave a process running when your turn ends. Start a script that runs longer than a few minutes with \`mei background watch\` as ${backgroundSkillPath} says: mei watches it and wakes you with how it ended.`;
+
 const backgroundHint = `## Background tasks
 
-When a task will take more than a few minutes, or the user wants something done or said at a later time, follow ${backgroundSkillPath} to hand it to a background task, then tell the user you will report back.`;
+When a task will take more than a few minutes, or the user wants something done or said at a later time, follow ${backgroundSkillPath} to hand it to a background task, then tell the user you will report back.
 
-const inBackground =
-  "You are running as a background task: the user is not here to answer questions, so decide for yourself and report what you did.";
+${watchHint}`;
+
+const inBackground = `You are running as a background task: the user is not here to answer questions, so decide for yourself and report what you did.
+
+${watchHint}`;
 
 export function startWorker(deps: Deps): Worker {
   const { db } = deps;

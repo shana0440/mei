@@ -252,7 +252,7 @@ Background tasks run one at a time, alongside chat. A run longer than `[backgrou
 
 ### Watched scripts
 
-An agent that starts a long script, such as training a model or processing many large files, hands it to mei with `mei background watch "<command>"` instead of leaving it running after its turn. mei runs it with `sh -c` in the folder the command was given in. Its output goes to `state/logs/<number>.output`, and `mei background list` shows how long it has run and the last line it printed. A watched script has no time limit, and several run side by side; `mei background cancel` stops one with everything it started.
+An agent that starts a long script, such as training a model or processing many large files, hands it to mei with `mei background watch "<command>"` instead of leaving it running after its turn, following the `background` skill. mei runs it with `sh -c` in the folder the command was given in. Its output goes to `state/logs/<number>.output`, and `mei background list` shows how long it has run and the last line it printed. A watched script has no time limit, and several run side by side; `mei background cancel` stops one with everything it started.
 
 When the script ends, successfully or not, mei resumes the session that started it with the exit status and the end of the output. That agent checks whether the script did what it was meant to, fixes it and watches it again if not (at most three runs in a row), and its report reaches you through [`listen`](#receiving-results) like any background result. The resumed run waits while that session is still busy, and it is stopped after `[background] timeout_minutes` like a background task. Watched from a terminal, outside any session, the script's result goes to a new session.
 
