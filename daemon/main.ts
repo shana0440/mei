@@ -1,4 +1,3 @@
-import { execFile } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
@@ -47,13 +46,6 @@ await runCommand(async () => {
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
     onStarted: (event) => progress.emit("started", event),
     onFinished: (event) => {
-      if (event.type === "task.background" || event.type === "task.script") {
-        const text = event.error ?? event.result ?? "";
-        execFile("notify-send", ["--app-name=mei", "--", `Mei · task #${event.id}`, text.slice(0, 4000)
-          .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")], { timeout: 10000 }, (error) => {
-          if (error) console.error(`Desktop notification for #${event.id} failed: ${error.message}`);
-        });
-      }
       const origin = event.type === "task.background" ? (event.payload as BackgroundTask).origin
         : event.type === "task.script" ? (event.payload as ScriptTask).sessionId : undefined;
       if (origin && findSession(db, origin)) {

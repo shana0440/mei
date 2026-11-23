@@ -262,13 +262,15 @@ A watched script outlives the daemon: under the systemd service it runs in a sco
 
 A program receives the result of each scheduled run and background task as it finishes by subscribing to the daemon. `npm run listen` is such a subscriber: it prints every result as one JSON line, with the answer in `result`, or the reason in `error` when the run failed. When a background task starts, it also prints a line with `"status":"running"`, so a program can show what is running; the result of that task comes later on a line of its own.
 
+For example, to opt into desktop notifications from the shell:
+
 ```sh
 npm run -s listen | jq --unbuffered -c 'select(.status != "running")' | while read -r event; do
   notify-send "mei" "$(jq -r '.result // .error' <<<"$event")"
 done
 ```
 
-Mei records background results as assistant messages. Run `mei history` for the conversation, or `mei history <session-id>` for one session. On Linux desktops, install `notify-send` (libnotify) on the daemon’s PATH to receive background completion notifications without running `mei listen`. If notification delivery fails, the reply remains in history.
+Mei records background results as assistant messages. Run `mei history` for the conversation, or `mei history <session-id>` for one session. Replies remain in history even when no client is listening. Each client decides whether and how to notify the user.
 
 With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation, and one that finishes while a message is waiting or being answered is held until the answer is sent. A failed run sends its error as is.
 
