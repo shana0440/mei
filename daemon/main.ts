@@ -24,9 +24,9 @@ import { maxScriptAttempts } from "./script.ts";
 import type { ScriptTask } from "./script.ts";
 import { startScheduler } from "./scheduler.ts";
 import { changeSchedules } from "./schedules.ts";
-import { findSession, shortTermMemory } from "./sessions.ts";
+import { conversation, findSession, shortTermMemory } from "./sessions.ts";
 import { startServer } from "./server.ts";
-import { listTimers, queueDream, syncTimers } from "./timers.ts";
+import { listTimers, queueDream, setIdleTimer, syncTimers } from "./timers.ts";
 import { startWorker } from "./worker.ts";
 import type { Deps } from "./worker.ts";
 
@@ -46,6 +46,12 @@ await runCommand(async () => {
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
     onStarted: (event) => progress.emit("started", event),
     onFinished: (event) => {
+      const origin = event.type === "task.background" ? (event.payload as BackgroundTask).origin
+        : event.type === "task.script" ? (event.payload as ScriptTask).sessionId : undefined;
+      if (origin && findSession(db, origin)) {
+        setIdleTimer(db, origin, Date.now() + config.idle.afterMinutes * 60_000);
+        deps.rearm();
+      }
       progress.emit(`finished:${event.id}`, event);
       progress.emit("finished");
     },
@@ -55,7 +61,6 @@ await runCommand(async () => {
   const { wake, cancel } = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
-  let listeners = 0;
 
   function apply(next: Config): void {
     db.exec("BEGIN");
@@ -84,6 +89,7 @@ await runCommand(async () => {
       if (event.error !== null) throw new Error(event.error);
       return { result: event.result ?? "", topic: event.topic ?? "" };
     },
+    history: ({ sessionId }) => ({ messages: conversation(db, sessionId) }),
     dream: () => {
       const eventId = queueDream(db, Date.now());
       if (eventId === undefined) throw new Error("No summaries are waiting for dream");
@@ -108,10 +114,8 @@ await runCommand(async () => {
       };
       progress.on("finished", publish);
       progress.on("started", send);
-      listeners++;
       publish();
       await closed;
-      listeners--;
       progress.off("finished", publish);
       progress.off("started", send);
       return {};
@@ -122,13 +126,14 @@ await runCommand(async () => {
       const session = fromSession === undefined ? undefined : findSession(db, fromSession);
       const payload: BackgroundTask = {
         text,
+        origin: fromSession,
         say: say ?? false,
         role: session?.role || config.router.defaultRole,
         folder: session?.folder || home,
       };
       const eventId = addEvent(db, { type: "task.background", payload, runAt: at }, now);
       rearm();
-      return { eventId, listening: listeners > 0 };
+      return { eventId };
     },
     watch: ({ command, folder, fromSession }) => {
       const sessionId = fromSession ?? randomUUID();
@@ -140,7 +145,7 @@ await runCommand(async () => {
       const payload: ScriptTask = { command, folder, sessionId, attempt };
       const eventId = addEvent(db, { type: "task.script", payload }, Date.now());
       wake();
-      return { eventId, listening: listeners > 0 };
+      return { eventId };
     },
     tasks: () => ({ tasks: backgroundTasks(db), timeoutMinutes: config.background.timeoutMinutes }),
     cancel: ({ eventId }) => {

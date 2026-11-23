@@ -4,7 +4,7 @@ import type { ScriptTask } from "./script.ts";
 
 export type Step = "command" | "script" | "agent" | "background" | "voice";
 
-export type BackgroundTask = { text: string; say: boolean; role: string; folder: string };
+export type BackgroundTask = { origin?: string; text: string; say: boolean; role: string; folder: string };
 
 export type InboxEvent = {
   id: number;

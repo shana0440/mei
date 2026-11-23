@@ -53,6 +53,13 @@ const migrations = [
     db.exec("UPDATE sessions SET summary = NULL");
   },
   "ALTER TABLE events ADD COLUMN run_at INTEGER",
+  `CREATE VIEW messages AS
+     SELECT id AS eventId, session_id AS sessionId, created_at AS at, 'user' AS role,
+            json_extract(payload, '$.text') AS text FROM events WHERE type = 'user.message'
+     UNION ALL
+     SELECT id, COALESCE(json_extract(payload, '$.origin'), json_extract(payload, '$.sessionId'), session_id),
+            finished_at, 'assistant', COALESCE(error, result)
+     FROM events WHERE type IN ('user.message','task.script','task.background') AND status IN ('done','failed')`,
 ];
 
 export function openDb(path: string): DatabaseSync {
