@@ -44,10 +44,6 @@ function what({ type, payload }: InboxEvent): string {
   return `${say ? "say " : ""}${cut(text.split("\n")[0])}`;
 }
 
-function warnIfNobodyListens(listening: boolean): void {
-  if (!listening) console.error("Nothing is listening for results right now; this one is kept until mei listen connects.");
-}
-
 await runCommand(async () => {
   const [action, ...args] = process.argv.slice(2);
   if (action === "add") {
@@ -57,7 +53,7 @@ await runCommand(async () => {
       options: { at: { type: "string" }, say: { type: "boolean" } },
     });
     if (positionals.length !== 1) throw new Error(usage);
-    const { eventId, listening } = await request({
+    const { eventId } = await request({
       type: "task",
       text: positionals[0],
       at: at(values.at),
@@ -65,20 +61,18 @@ await runCommand(async () => {
       fromSession: process.env.PI_SESSION_ID,
     });
     console.log(values.at === undefined ? `Queued as #${eventId}` : `Waiting as #${eventId}`);
-    warnIfNobodyListens(listening);
     return;
   }
   if (action === "watch") {
     const { positionals } = parseArgs({ args, allowPositionals: true, options: {} });
     if (positionals.length !== 1) throw new Error(usage);
-    const { eventId, listening } = await request({
+    const { eventId } = await request({
       type: "watch",
       command: positionals[0],
       folder: process.cwd(),
       fromSession: process.env.PI_SESSION_ID,
     });
     console.log(`Watching as #${eventId}; its output goes to ${scriptFiles(eventId).output}`);
-    warnIfNobodyListens(listening);
     return;
   }
   if (action === "list" && args.length === 0) {

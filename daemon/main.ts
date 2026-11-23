@@ -1,3 +1,4 @@
+import { execFile } from "node:child_process";
 import { EventEmitter, once } from "node:events";
 import { randomUUID } from "node:crypto";
 import { cpSync, mkdirSync, rmSync } from "node:fs";
@@ -46,6 +47,13 @@ await runCommand(async () => {
     onLine: (eventId, line) => progress.emit(`line:${eventId}`, line),
     onStarted: (event) => progress.emit("started", event),
     onFinished: (event) => {
+      if (event.type === "task.background" || event.type === "task.script") {
+        const text = event.error ?? event.result ?? "";
+        execFile("notify-send", ["--app-name=mei", "--", `Mei · task #${event.id}`, text.slice(0, 4000)
+          .replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;")], { timeout: 10000 }, (error) => {
+          if (error) console.error(`Desktop notification for #${event.id} failed: ${error.message}`);
+        });
+      }
       const origin = event.type === "task.background" ? (event.payload as BackgroundTask).origin
         : event.type === "task.script" ? (event.payload as ScriptTask).sessionId : undefined;
       if (origin && findSession(db, origin)) {
@@ -61,7 +69,6 @@ await runCommand(async () => {
   const { wake, cancel } = startWorker(deps);
   const rearm = startScheduler(deps, wake);
   wake();
-  let listeners = 0;
 
   function apply(next: Config): void {
     db.exec("BEGIN");
@@ -115,10 +122,8 @@ await runCommand(async () => {
       };
       progress.on("finished", publish);
       progress.on("started", send);
-      listeners++;
       publish();
       await closed;
-      listeners--;
       progress.off("finished", publish);
       progress.off("started", send);
       return {};
@@ -136,7 +141,7 @@ await runCommand(async () => {
       };
       const eventId = addEvent(db, { type: "task.background", payload, runAt: at }, now);
       rearm();
-      return { eventId, listening: listeners > 0 };
+      return { eventId };
     },
     watch: ({ command, folder, fromSession }) => {
       const sessionId = fromSession ?? randomUUID();
@@ -148,7 +153,7 @@ await runCommand(async () => {
       const payload: ScriptTask = { command, folder, sessionId, attempt };
       const eventId = addEvent(db, { type: "task.script", payload }, Date.now());
       wake();
-      return { eventId, listening: listeners > 0 };
+      return { eventId };
     },
     tasks: () => ({ tasks: backgroundTasks(db), timeoutMinutes: config.background.timeoutMinutes }),
     cancel: ({ eventId }) => {

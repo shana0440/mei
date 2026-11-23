@@ -14,7 +14,7 @@ A background task runs once, as a new session in this session's role and folder,
    - A reminder, said as written at that time with no agent run: `mei background add --at <time> --say "<what to tell the user>"`
 
    `<time>` is local time as `YYYY-MM-DDTHH:MM`. Work it out from the user's words and `date`; for "in 20 minutes", use `date -d '+20 minutes' +%Y-%m-%dT%H:%M`. For several times, such as "for the next two days", add one task per time. Something that repeats with no end is a schedule: follow the `schedule` skill in place of this one.
-3. Answer the user: what will run and when, and that the result comes on its own. If the command warns that nothing is listening, tell the user the result waits until something listens with `mei listen`, so a reminder will not reach them by itself.
+3. Answer the user: what will run and when, and that the result comes on its own.
 
 ## Long scripts
 

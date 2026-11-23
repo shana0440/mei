@@ -268,7 +268,7 @@ npm run -s listen | jq --unbuffered -c 'select(.status != "running")' | while re
 done
 ```
 
-mei cannot alert you by itself: whatever subscribes is the alarm, so a reminder reaches you only through a subscriber like this one. `mei background add` warns when nothing is subscribed.
+Mei records background results as assistant messages. Run `mei history` for the conversation, or `mei history <session-id>` for one session. On Linux desktops, install `notify-send` (libnotify) on the daemon’s PATH to receive background completion notifications without running `mei listen`. If notification delivery fails, the reply remains in history.
 
 With `[character] enabled`, the voice rewrites each result before it is sent, the same way as a chat answer. A result that arrives while you are in the middle of a conversation comes as an aside, so it does not mix into that conversation, and one that finishes while a message is waiting or being answered is held until the answer is sent. A failed run sends its error as is.
 

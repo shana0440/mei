@@ -19,11 +19,11 @@ export type Requests = {
   schedule: { message: { change: ScheduleChange }; reply: {} };
   task: {
     message: { text: string; at?: number; say?: boolean; fromSession?: string };
-    reply: { eventId: number; listening: boolean };
+    reply: { eventId: number };
   };
   watch: {
     message: { command: string; folder: string; fromSession?: string };
-    reply: { eventId: number; listening: boolean };
+    reply: { eventId: number };
   };
   tasks: { message: {}; reply: { tasks: InboxEvent[]; timeoutMinutes: number } };
   cancel: { message: { eventId: number }; reply: {} };
