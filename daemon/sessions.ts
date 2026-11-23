@@ -1,5 +1,12 @@
 import type { DatabaseSync } from "node:sqlite";
 
+export type ConversationMessage = { eventId: number; sessionId: string | null; at: number; role: "user" | "assistant"; text: string };
+
+export function conversation(db: DatabaseSync, sessionId?: string): ConversationMessage[] {
+  return db.prepare(`SELECT * FROM messages WHERE (? IS NULL OR sessionId = ?)
+    ORDER BY at, eventId, role DESC`).all(sessionId ?? null, sessionId ?? null) as ConversationMessage[];
+}
+
 export type Session = {
   id: string;
   topic: string;

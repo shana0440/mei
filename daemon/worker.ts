@@ -26,6 +26,7 @@ import { describeEnd, maxScriptAttempts, runScript, scriptFiles, watchScript } f
 import type { ScriptTask } from "./script.ts";
 import type { run } from "./runner.ts";
 import {
+  conversation,
   describeSummaries,
   findSession,
   forgetSummaries,
@@ -191,6 +192,7 @@ const agentWorkByType: Record<string, Work | undefined> = {
     const onLine = (line: string) => deps.onLine(event.id, line);
 
     const { sessionId, topic, role, folder, isNew, reason, context } = await route(deps, text);
+    keepSession(deps.db, event.id, { sessionId });
     const routeLine = JSON.stringify({ type: "mei_route", sessionId, topic, role: role.name, folder, isNew, reason });
     appendFileSync(logFile, `${routeLine}\n`);
     onLine(routeLine);
@@ -265,7 +267,7 @@ const agentWorkByType: Record<string, Work | undefined> = {
       prompt: fillPrompt(readFileSync(summarizePromptPath, "utf8"), {
         transcript: join(chatSessionsDir, transcript),
         now: new Date().toLocaleString(),
-      }),
+      }) + `\n\nUser-facing conversation, including later replies (JSON):\n${JSON.stringify(conversation(deps.db, sessionId))}`,
       model: deps.config.idle.model,
       logFile: logFileOf(event),
     });

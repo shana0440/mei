@@ -1,12 +1,13 @@
 import type { Schedule } from "./config.ts";
 import type { InboxEvent } from "./inbox.ts";
 import type { ScheduleChange } from "./schedules.ts";
-import type { SummarizedSession } from "./sessions.ts";
+import type { ConversationMessage, SummarizedSession } from "./sessions.ts";
 import type { Timer } from "./timers.ts";
 
 export type ScheduleListing = Schedule & { dueAt: number | null };
 
 export type Requests = {
+  history: { message: { sessionId?: string }; reply: { messages: ConversationMessage[] } };
   chat: { message: { text: string; debug?: boolean }; reply: { result: string; topic: string } };
   job: { message: { name: string }; reply: { eventId: number } };
   dream: { message: {}; reply: { eventId: number } };

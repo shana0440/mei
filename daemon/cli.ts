@@ -2,6 +2,7 @@ import { runCommand } from "./client.ts";
 
 const usage = `Usage:
   mei chat [--debug] "<prompt>"
+  mei history [session-id]
   mei status
   mei reload
   mei reset --yes
@@ -23,7 +24,7 @@ await runCommand(async () => {
     console.log(usage);
     return;
   }
-  if (!["chat", "status", "reload", "reset", "job", "dream", "listen", "schedule", "background", "config", "update"].includes(command)) {
+  if (!["chat", "history", "status", "reload", "reset", "job", "dream", "listen", "schedule", "background", "config", "update"].includes(command)) {
     throw new Error(`Unknown command "${command}"\n\n${usage}`);
   }
   if ((command === "status" || command === "dream") && process.argv.length > 3) throw new Error(`Usage: mei ${command}`);
