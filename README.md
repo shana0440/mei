@@ -66,7 +66,7 @@ Everything that belongs to your mei is in one directory, `~/.local/share/mei`. S
 | Path | What it is |
 |---|---|
 | `AGENTS.md` | operating instructions |
-| `CHARACTER.md` | the default character: language, tone and speaking style |
+| `CHARACTER.md` | the default character: how the voice rewrites answers, in what language, tone and style |
 | `PROJECTS.md` | the locations on your machine and what each is for |
 | `config.toml` | settings |
 | `prompts/` | `summarize.md`, `dream.md` and the prompts of your own schedules |
@@ -136,7 +136,7 @@ Each message goes through up to three runs:
 
 1. The router picks the session. For a new session it also picks a role, from the roles' `use`, and a folder: a `Path` from `PROJECTS.md`, a folder inside one, or the home. The session keeps its role and folder, and so does a new session that continues a closed one.
 2. The working agent does the task with the role's model. It is plain Pi started in the session's folder, so it follows that folder's `AGENTS.md` and skills, the same as running `pi-bolt` there yourself. It also gets the short-term memory.
-3. With `[character] enabled`, the voice rewrites the answer as the character file asks, under the `name` set in `[character]`. It sees the last four things it said to you across all topics, chat answers and scheduled results alike, with how long ago each was, so it can tell when it is changing the subject. It has no tools. The default `CHARACTER.md` asks it to keep code, commands, paths and numbers exactly. If it fails, you get the working agent's answer.
+3. With `[character] enabled`, the voice rewrites the answer as the character file asks, under the `name` set in `[character]`. It sees the last four things it said to you across all topics, chat answers and scheduled results alike, with how long ago each was, so it can tell when it is changing the subject. It has no tools. All of its instructions are in the character file, so a character file of your own should keep what the default `CHARACTER.md` says about replying with the rewritten answer only, keeping facts exactly and treating what the answer says was done as done. If it fails, you get the working agent's answer.
 
 Summaries are written from the working agent's transcript, so memory holds the original answers. The voice follows the character file and its `name` alone. The instructions for the router's decision are in `prompts/route.md` in this checkout.
 
