@@ -34,7 +34,7 @@ export async function voice({ db, config, run }: Deps, { logFile, answer, about 
   if (!config.character.enabled) return answer;
   const data = { recent: recentlySaid(db, recentLimit, Date.now()), ...about, answer };
   const { ok, response, error } = await run({
-    prompt: `${task(about)} "recent" is what you last said to the user, oldest first, across topics. The agent that wrote the answer had tools and did what the answer says: files it wrote are written. Rewrite the answer as your character, keeping every fact and claim, and reply with it only.\n\n${JSON.stringify(data, null, 2)}`,
+    prompt: `${task(about)} "recent" is what you last said to the user, oldest first, across topics.\n\n${JSON.stringify(data, null, 2)}`,
     model: config.character.model,
     tools: false,
     contextFiles: false,
